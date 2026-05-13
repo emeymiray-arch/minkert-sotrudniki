@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,450;0,550;0,600;0,700;1,450&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: 0 0% 98%;
+  --sidebar: 0 0% 100%;
+  --panel: 0 0% 100%;
+  --elevated: 0 0% 100%;
+  --muted: 240 4% 46%;
+  --stroke: 240 6% 90%;
+  --accent: 250 92% 58%;
+  --accent-fg: 0 0% 100%;
+  --accent-muted: 250 92% 58%;
+  --ring-focus: 250 92% 58%;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: 240 10% 4%;
+  --sidebar: 240 10% 6%;
+  --panel: 240 8% 8%;
+  --elevated: 240 7% 11%;
+  --muted: 240 5% 52%;
+  --stroke: 240 6% 16%;
+  --accent: 252 91% 68%;
+  --accent-fg: 240 15% 6%;
+  --accent-muted: 252 65% 55%;
+  --ring-focus: 252 91% 68%;
+}
+
+@layer base {
+  * {
+    @apply border-stroke;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-[hsl(var(--bg))] font-sans text-zinc-900 antialiased transition-colors duration-200 dark:text-zinc-100;
+  }
+}
+
+@layer utilities {
+  .surface-panel {
+    @apply rounded-xl border border-stroke bg-[hsl(var(--panel))] shadow-sm dark:border-white/[0.06] dark:shadow-none;
+  }
+
+  .surface-elevated {
+    @apply rounded-xl border border-stroke bg-[hsl(var(--elevated))] dark:border-white/[0.08];
+  }
+}

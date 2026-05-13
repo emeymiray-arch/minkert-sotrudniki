@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  passwordHash   String
+  name           String
+  role           UserRole       @default(VIEWER)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  refreshTokens  RefreshToken[]
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  tokenSha256 String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Employee {
+  id        String         @id @default(cuid())
+  name      String
+  position  String
+  status    EmployeeStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  tasks     Task[]
+
+  @@index([name])
+  @@index([status])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @default("")
+  taskDate    DateTime @db.Date
+  mon         Int      @default(0)
+  tue         Int      @default(0)
+  wed         Int      @default(0)
+  thu         Int      @default(0)
+  fri         Int      @default(0)
+  sat         Int      @default(0)
+  sun         Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([taskDate])
+}

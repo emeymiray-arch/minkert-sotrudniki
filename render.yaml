@@ -1,0 +1,29 @@
+# Blueprint для https://render.com — подключите репозиторий и создайте Blueprint.
+# Перед первым деплоем задайте в панели Render переменные (или через Dashboard после создания):
+#   DATABASE_URL — строка из Neon / Supabase / другого Postgres (с sslmode=require если нужно)
+#   JWT_ACCESS_SECRET — длинная случайная строка (например openssl rand -hex 32)
+#   CORS_ORIGIN — URL фронта на Vercel, например https://minkert.vercel.app
+
+services:
+  - type: web
+    name: minkert-api
+    runtime: node
+    region: frankfurt
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_SECONDS
+        value: "3600"
+      - key: JWT_REFRESH_EXPIRES_DAYS
+        value: "14"
