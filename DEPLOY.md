@@ -1,5 +1,59 @@
 # Выкладываем Minkert в интернет
 
+## Почему на Vercel пишет «Запустите backend…»
+
+Сборка Vite **вшивает** адрес API на момент `npm run build`. Если в Vercel **не задана** переменная **`VITE_API_URL`**, в продакшене используется запасной вариант **`http://localhost:3000/api`** — в браузере пользователя **нет** вашего локального Nest, поэтому запрос падает и показывается сообщение про backend.
+
+**Что сделать:**
+
+1. Задеплойте API на Render / Railway (см. ниже) и скопируйте публичный URL, например `https://minkert-api-xxxx.onrender.com`.
+2. В **Vercel** → ваш проект → **Settings** → **Environment Variables**:
+   - **Name:** `VITE_API_URL`
+   - **Value:** `https://minkert-api-xxxx.onrender.com/api` (обязательно суффикс **`/api`** — у Nest глобальный префикс).
+   - Окружения: **Production** (и **Preview**, если нужно).
+3. **Deployments** → последний деплой → **⋯** → **Redeploy** (или новый push), чтобы **пересобрать** фронт с новой переменной.
+
+Переменные `VITE_*` не подхватываются «на лету» после сборки — только **пересборка**.
+
+---
+
+## Стек и структура backend (кратко)
+
+| Слой | Технология |
+|------|------------|
+| Фреймворк | **NestJS 10** (модули, DI, guards) |
+| HTTP | **Express** (через `@nestjs/platform-express`) |
+| ORM | **Prisma 7** + драйвер **`@prisma/adapter-pg`** + **`pg`** |
+| БД | **PostgreSQL** (схема в `prisma/schema.prisma`) |
+| Аутентификация | **JWT** (`@nestjs/jwt`, `passport-jwt`), refresh-токены в таблице `RefreshToken` |
+| Валидация | **class-validator** + `ValidationPipe` (whitelist) |
+
+**Папки `backend/src`:** `auth/`, `users/`, `employees/`, `tasks/` (два контроллера: задачи сотрудника и PATCH задачи), `analytics/`, `prisma/`, `common/` (KPI, даты, константы дней). Точка входа: `main.ts`, префикс **`/api`**, порт **`PORT`** (по умолчанию 3000), bind **`0.0.0.0`**.
+
+**Продакшен-старт:** `npm run start:prod` → `node dist/src/main.js`. В **Dockerfile** перед стартом: `npx prisma migrate deploy`.
+
+---
+
+## Куда деплоить backend
+
+| Платформа | Плюсы | Минусы |
+|-----------|--------|--------|
+| **[Render](https://render.com)** | Уже есть **`render.yaml`** в репо, free tier, понятные логи | Free web «засыпает», холодный старт ~30–60 с |
+| **[Railway](https://railway.app)** | Очень быстрый деплой из GitHub, Postgres одной кнопкой | Платёжная карта / лимиты на free |
+| **Fly.io**, **Coolify**, **VPS + Docker** | Полный контроль | Больше ручной настройки |
+
+Для вашего кейса **Neon (Postgres) + Render (Node из `backend/`) + Vercel (фронт)** — минимум сюрпризов и уже описано в этом файле.
+
+---
+
+## PostgreSQL в production
+
+- Удобно **Neon** или **Supabase**: управляемый Postgres, бэкапы, `sslmode=require` в `DATABASE_URL`.
+- Строка подключения — **только** в секретах хостинга (Render/Railway), не в репозитории.
+- После первого деплоя API один раз в Shell: `npx prisma db seed` (демо-пользователи), либо только миграции (`migrate deploy` уже в `startCommand` на Render).
+
+---
+
 Нужны **три части**: база PostgreSQL, бэкенд (API), фронт (сайт). Один только Vercel недостаточно: на Vercel удобно разместить **React**, а **Nest и база** — на другом сервисе.
 
 Ниже — простой рабочий вариант: **Neon (бесплатная БД) + Render (API) + Vercel (сайт)**.

@@ -17,7 +17,7 @@ export class EmployeeTasksController {
   }
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
   create(
     @Param('employeeId') employeeId: string,
     @Body() dto: CreateTaskDto,
@@ -32,7 +32,7 @@ export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
   patch(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: JwtUserPayload) {
     return this.tasks.update(id, dto, user);
   }

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
+import { Trash2 } from 'lucide-react';
 import * as React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -16,8 +17,9 @@ import { useAuth } from '@/context/auth';
 import { utcMondayIso } from '@/lib/date';
 import { ruEmployeeStatus } from '@/lib/format';
 import { apiJson } from '@/lib/http';
+import { canEditTaskDays } from '@/lib/taskPermissions';
 import { DAY_KEYS, DAY_LABEL_RU, nextStatus, type DayKey } from '@/lib/task-days';
-import type { Employee, Task, UserRole } from '@/lib/types';
+import type { Employee, Task } from '@/lib/types';
 
 type EmployeeOverview = {
   streakWeeks: number;
@@ -26,10 +28,6 @@ type EmployeeOverview = {
   monthlyEfficiency: number;
   periodEfficiency: number;
 };
-
-function canEdit(role?: UserRole) {
-  return role === 'ADMIN' || role === 'MANAGER';
-}
 
 function formatTaskDate(raw: unknown) {
   if (typeof raw === 'string') return raw.slice(0, 10);
@@ -42,6 +40,7 @@ function formatTaskDate(raw: unknown) {
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
 
@@ -82,6 +81,19 @@ export default function EmployeeDetailPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка сохранения'),
   });
 
+  const removeEmployee = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Пустой ID');
+      return apiJson(`/employees/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: async () => {
+      toast.success('Сотрудник удалён');
+      await qc.invalidateQueries({ queryKey: ['employees'] });
+      navigate('/employees', { replace: true });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Нет доступа или ошибка удаления'),
+  });
+
   const createTask = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('Пустой ID');
@@ -107,7 +119,7 @@ export default function EmployeeDetailPage() {
   });
 
   const onToggleDay = (taskId: string, day: DayKey, currentRaw: unknown) => {
-    if (!canEdit(user?.role)) return;
+    if (!id || !canEditTaskDays(user, id)) return;
     const current = typeof currentRaw === 'number' ? currentRaw : Number(currentRaw ?? 0);
     const next = nextStatus(current);
     patchTask.mutate({ taskId, days: { [day]: next } });
@@ -139,9 +151,26 @@ export default function EmployeeDetailPage() {
               }
               actions={
                 <>
-                  {canEdit(user?.role) ?
+                  {canEditTaskDays(user, id) ?
                     <Button type="button" onClick={() => setDialogOpen(true)}>
                       Новая задача
+                    </Button>
+                  : null}
+                  {user?.role === 'ADMIN' ?
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="text-rose-600 dark:text-rose-200"
+                      disabled={removeEmployee.isPending}
+                      title="Удалить сотрудника"
+                      aria-label={`Удалить сотрудника ${employee.data?.name ?? ''}`}
+                      onClick={() => {
+                        if (!confirm('Удалить сотрудника? Это необратимо.')) return;
+                        removeEmployee.mutate();
+                      }}
+                    >
+                      <Trash2 className="mr-1.5 size-4" aria-hidden />
+                      Удалить
                     </Button>
                   : null}
                   <Button variant="outline" asChild>
@@ -185,7 +214,7 @@ export default function EmployeeDetailPage() {
             <Skeleton className="h-28 w-full" />
           </div>
         : items.length === 0 ?
-          <EmptyTasks employeeName={employee.data?.name} canEdit={canEdit(user?.role)} open={() => setDialogOpen(true)} />
+          <EmptyTasks employeeName={employee.data?.name} canEdit={canEditTaskDays(user, id)} open={() => setDialogOpen(true)} />
         : items.map((t) => (
             <motion.div layout key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="mb-6 rounded-xl border border-stroke bg-[hsl(var(--panel))] p-4 dark:border-white/[0.06]">
@@ -208,9 +237,9 @@ export default function EmployeeDetailPage() {
                           <button
                             key={day}
                             type="button"
-                            disabled={!canEdit(user?.role) || patchTask.isPending}
+                            disabled={!canEditTaskDays(user, id) || patchTask.isPending}
                             onClick={() => onToggleDay(t.id, day, value)}
-                            className={cnCell(value, canEdit(user?.role))}
+                            className={cnCell(value, canEditTaskDays(user, id))}
                             title={`${DAY_LABEL_RU[idx]} — ${labelForStatus(value)}`}
                           >
                             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-70">{DAY_LABEL_RU[idx]}</div>

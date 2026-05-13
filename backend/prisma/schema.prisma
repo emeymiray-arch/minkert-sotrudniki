@@ -19,14 +19,18 @@ enum EmployeeStatus {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  email          String         @unique
-  passwordHash   String
-  name           String
-  role           UserRole       @default(VIEWER)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  refreshTokens  RefreshToken[]
+  id                 String         @id @default(cuid())
+  email              String         @unique
+  passwordHash       String
+  name               String
+  role               UserRole       @default(VIEWER)
+  linkedEmployeeId   String?
+  linkedEmployee     Employee?      @relation(fields: [linkedEmployeeId], references: [id], onDelete: SetNull)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  refreshTokens      RefreshToken[]
+
+  @@index([linkedEmployeeId])
 }
 
 model RefreshToken {
@@ -41,13 +45,14 @@ model RefreshToken {
 }
 
 model Employee {
-  id        String         @id @default(cuid())
-  name      String
-  position  String
-  status    EmployeeStatus @default(ACTIVE)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  tasks     Task[]
+  id          String         @id @default(cuid())
+  name        String
+  position    String
+  status      EmployeeStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tasks       Task[]
+  linkedUsers User[]
 
   @@index([name])
   @@index([status])

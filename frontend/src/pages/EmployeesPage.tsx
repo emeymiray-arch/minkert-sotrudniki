@@ -23,6 +23,7 @@ import { motion } from 'framer-motion';
 import { LayoutGrid, List, Trash2 } from 'lucide-react';
 
 import { useAuth } from '@/context/auth';
+import { canEditTaskDays } from '@/lib/taskPermissions';
 
 type EmployeeOverview = {
   streakWeeks: number;
@@ -227,12 +228,15 @@ export default function EmployeesPage() {
                       variant="ghost"
                       size="sm"
                       className="text-rose-600 dark:text-rose-200"
+                      title="Удалить сотрудника"
+                      aria-label={`Удалить сотрудника ${e.name}`}
                       onClick={() => {
                         if (!confirm('Удалить сотрудника? Это необратимо.')) return;
                         removeEmployee.mutate(e.id);
                       }}
                     >
                       <Trash2 className="size-4" />
+                      <span className="ml-1.5 hidden min-[1000px]:inline">Удалить</span>
                     </Button>
                   : null}
                 </div>
@@ -331,9 +335,32 @@ export default function EmployeesPage() {
                   </div>
                   <div className="text-sm text-muted">{employee.position}</div>
                 </div>
-                <Badge tone={statusTone(employee.status)}>
-                  KPI: {(employee.kpiWeeklyRounded ?? Math.round(employee.kpiWeekly ?? 0)).toFixed(0)}%
-                </Badge>
+                <div className="flex flex-shrink-0 flex-col items-end gap-2">
+                  <Badge tone={statusTone(employee.status)}>
+                    KPI: {(employee.kpiWeeklyRounded ?? Math.round(employee.kpiWeekly ?? 0)).toFixed(0)}%
+                  </Badge>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/employees/${employee.id}`}>Профиль</Link>
+                    </Button>
+                    {user?.role === 'ADMIN' ?
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-600 dark:text-rose-200"
+                        title="Удалить сотрудника"
+                        aria-label={`Удалить сотрудника ${employee.name}`}
+                        onClick={() => {
+                          if (!confirm('Удалить сотрудника? Это необратимо.')) return;
+                          removeEmployee.mutate(employee.id);
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="ml-1.5 hidden sm:inline">Удалить</span>
+                      </Button>
+                    : null}
+                  </div>
+                </div>
               </div>
 
               {taskQuery?.isLoading ? (
@@ -356,7 +383,7 @@ export default function EmployeesPage() {
                         <button
                           key={day}
                           type="button"
-                          disabled={!canWrite(user?.role) || patchTaskDay.isPending}
+                          disabled={!canEditTaskDays(user, employee.id) || patchTaskDay.isPending}
                           onClick={() => patchTaskDay.mutate({ taskId: latestTask.id, day, current: value })}
                           className={`rounded-xl border px-2 py-2 text-xs font-semibold transition ${
                             value === 0
@@ -376,7 +403,7 @@ export default function EmployeesPage() {
               ) : (
                 <div className="mt-4 rounded-xl border border-dashed border-stroke p-4 text-sm text-muted dark:border-white/10">
                   Нет задач.{' '}
-                  {canWrite(user?.role) ? (
+                  {canEditTaskDays(user, employee.id) ? (
                     <button
                       type="button"
                       onClick={() => createTaskForEmployee.mutate(employee.id)}
@@ -524,6 +551,9 @@ export default function EmployeesPage() {
 
                   <div className="text-xs text-muted dark:text-white/55">
                     Недельный KPI — без лишнего текста.{` Активно: ${items.length}`}
+                    {user?.role === 'ADMIN' ?
+                      ' Удаление — кнопка с корзиной у каждого сотрудника (здесь, в картах и в таблице).'
+                    : null}
                   </div>
                 </div>
 

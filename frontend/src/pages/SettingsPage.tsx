@@ -60,7 +60,7 @@ export default function SettingsPage() {
 
   const updateProfile = useMutation({
     mutationFn: () =>
-      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER' }>(
+      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER'; linkedEmployeeId?: string | null }>(
         '/users/me',
         {
           method: 'PATCH',
@@ -114,6 +114,12 @@ export default function SettingsPage() {
               <Badge tone="neutral" className="mt-2">
                 {cnRoleRu(user?.role ?? '—')}
               </Badge>
+              {user?.role === 'VIEWER' ?
+                <p className="mt-3 text-xs leading-relaxed text-muted dark:text-white/50">
+                  Отметки по дням в <strong>рабочих</strong> задачах доступны только для карточки сотрудника, привязанной к вашему
+                  аккаунту. Попросите администратора указать привязку (или выполните повторный вход после её настройки).
+                </p>
+              : null}
             </div>
           </div>
         </div>

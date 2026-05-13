@@ -34,10 +34,15 @@ export function setStoredUser(userRaw: unknown) {
   localStorage.setItem(KEYS.user, JSON.stringify(userRaw));
 }
 
+export const AUTH_SESSION_LOST_EVENT = 'minkert:auth-session-lost';
+
 export function clearAuthBundle() {
   localStorage.removeItem(KEYS.access);
   localStorage.removeItem(KEYS.refresh);
   localStorage.removeItem(KEYS.user);
+  if (typeof window !== 'undefined') {
+    queueMicrotask(() => window.dispatchEvent(new CustomEvent(AUTH_SESSION_LOST_EVENT)));
+  }
 }
 
 export function readStoredUser<T>(): T | null {

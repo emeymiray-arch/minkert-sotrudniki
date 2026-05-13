@@ -24,6 +24,17 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+/** Подсказка, если фронт на Vercel, а API_BASE всё ещё localhost (забыли VITE_API_URL при сборке). */
+function connectionTroubleshootHint(): string {
+  if (typeof window === 'undefined') return '';
+  const h = window.location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1') return '';
+  if (API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')) {
+    return ' На Vercel: Settings → Environment Variables → VITE_API_URL = https://ваш-backend.../api → Redeploy (без пересборки переменная не попадёт в клиент).';
+  }
+  return '';
+}
+
 /** Для отображения в настройках и отладки */
 export function getApiBaseUrl(): string {
   return API_BASE;
@@ -81,7 +92,13 @@ async function tryRefreshOnce(): Promise<boolean> {
 }
 
 async function authorizedFetch(input: RequestInfo | URL, init: RequestInit, attempt = 0): Promise<Response> {
-  const accessToken = getAccessToken();
+  let accessToken = getAccessToken();
+  if (!accessToken && attempt === 0 && getRefreshToken()) {
+    const refreshed = await tryRefreshOnce();
+    if (refreshed) return authorizedFetch(input, init, 1);
+  }
+  accessToken = getAccessToken();
+
   const headers = new Headers(init.headers ?? {});
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   if (!headers.has('Content-Type') && init.body && !(init.body instanceof FormData))
@@ -92,7 +109,8 @@ async function authorizedFetch(input: RequestInfo | URL, init: RequestInit, atte
     response = await fetch(input, { ...init, headers });
   } catch {
     throw new Error(
-      'Не удаётся связаться с сервером. Запустите бэкенд: в папке backend выполните `npm run start:dev` (и поднимите PostgreSQL, например `docker compose up -d db`).',
+      'Не удаётся связаться с сервером. Запустите бэкенд: в папке backend выполните `npm run start:dev` (и поднимите PostgreSQL, например `docker compose up -d db`).' +
+        connectionTroubleshootHint(),
     );
   }
   if (response.status === 401 && attempt === 0) {
@@ -119,7 +137,8 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
         });
   } catch {
     throw new Error(
-      'Не удаётся связаться с сервером. Запустите бэкенд: в папке backend выполните `npm run start:dev` (и поднимите PostgreSQL, например `docker compose up -d db`).',
+      'Не удаётся связаться с сервером. Запустите бэкенд: в папке backend выполните `npm run start:dev` (и поднимите PostgreSQL, например `docker compose up -d db`).' +
+        connectionTroubleshootHint(),
     );
   }
 
@@ -127,7 +146,8 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
     let message = `Ошибка ${response.status}`;
     if (response.status === 502 || response.status === 503 || response.status === 504) {
       message =
-        'Бэкенд не отвечает (502/503 от прокси). Запустите API в отдельном терминале: cd backend && npm run start:dev. Убедитесь, что порт 3000 свободен и PostgreSQL запущен (brew services start postgresql@16). Либо из корня проекта: npm run dev';
+        'Бэкенд не отвечает (502/503 от прокси). Запустите API в отдельном терминале: cd backend && npm run start:dev. Убедитесь, что порт 3000 свободен и PostgreSQL запущен (brew services start postgresql@16). Либо из корня проекта: npm run dev' +
+        connectionTroubleshootHint();
     } else {
       try {
         const body = (await response.json()) as { message?: string | string[] };
@@ -136,6 +156,9 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
       } catch {
         /* тело не JSON — оставляем код статуса */
       }
+    }
+    if (response.status === 401 && message === 'Unauthorized') {
+      message = 'Сессия истекла или не выполнен вход. Обновите страницу и войдите снова.';
     }
     throw new Error(message);
   }

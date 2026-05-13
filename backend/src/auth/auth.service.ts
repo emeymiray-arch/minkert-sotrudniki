@@ -48,8 +48,18 @@ export class AuthService {
     return expiresAt;
   }
 
-  async issueTokens(user: { id: string; email: string; role: UserRole }): Promise<AuthTokenPair> {
-    const payload: JwtUserPayload = { sub: user.id, email: user.email, role: user.role };
+  async issueTokens(user: {
+    id: string;
+    email: string;
+    role: UserRole;
+    linkedEmployeeId?: string | null;
+  }): Promise<AuthTokenPair> {
+    const payload: JwtUserPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      linkedEmployeeId: user.linkedEmployeeId ?? null,
+    };
     const accessToken = this.signAccess(payload);
     const rawRefresh = randomRefreshToken();
     await this.persistRefresh(user.id, rawRefresh);
@@ -68,7 +78,13 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
     return {
       tokens,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        linkedEmployeeId: user.linkedEmployeeId ?? null,
+      },
     };
   }
 
@@ -94,6 +110,7 @@ export class AuthService {
       id: u.id,
       email: u.email,
       role: u.role,
+      linkedEmployeeId: u.linkedEmployeeId,
     });
   }
 
@@ -109,12 +126,38 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
     return {
       tokens,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        linkedEmployeeId: user.linkedEmployeeId ?? null,
+      },
     };
   }
 
-  async registerAdmin(dto: { email: string; password: string; name: string; role: UserRole }) {
-    const user = await this.users.registerUser(dto.email, dto.password, dto.name, dto.role ?? UserRole.VIEWER);
-    return { user: { id: user.id, email: user.email, name: user.name, role: user.role } };
+  async registerAdmin(dto: {
+    email: string;
+    password: string;
+    name: string;
+    role: UserRole;
+    linkedEmployeeId?: string | null;
+  }) {
+    const user = await this.users.registerUser(
+      dto.email,
+      dto.password,
+      dto.name,
+      dto.role ?? UserRole.VIEWER,
+      dto.linkedEmployeeId ?? undefined,
+    );
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        linkedEmployeeId: user.linkedEmployeeId ?? null,
+      },
+    };
   }
 }

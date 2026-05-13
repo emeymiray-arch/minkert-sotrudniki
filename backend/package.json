@@ -1,6 +1,9 @@
 {
   "name": "backend",
   "version": "0.0.1",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "description": "",
   "author": "",
   "private": true,
@@ -9,6 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "build": "prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

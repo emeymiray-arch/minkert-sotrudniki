@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { startUtcWeekMonday } from '../common/date/week';
@@ -26,6 +26,14 @@ export class TasksService {
       throw new ForbiddenException('Недостаточно прав для изменений');
   }
 
+  private isViewerEditingOwnTasks(user: JwtUserPayload | undefined, taskEmployeeId: string) {
+    return (
+      user?.role === UserRole.VIEWER &&
+      Boolean(user.linkedEmployeeId) &&
+      user.linkedEmployeeId === taskEmployeeId
+    );
+  }
+
   async list(employeeId: string) {
     await this.ensureEmployee(employeeId);
     return this.prisma.task.findMany({
@@ -35,7 +43,9 @@ export class TasksService {
   }
 
   async create(employeeId: string, dto: CreateTaskDto, user?: JwtUserPayload) {
-    this.ensureWriteRole(user);
+    if (!this.isViewerEditingOwnTasks(user, employeeId)) {
+      this.ensureWriteRole(user);
+    }
     await this.ensureEmployee(employeeId);
     const taskDate = startUtcWeekMonday(dto.taskDate);
     const zeros = {
@@ -60,9 +70,21 @@ export class TasksService {
   }
 
   async update(taskId: string, dto: UpdateTaskDto, user?: JwtUserPayload) {
-    this.ensureWriteRole(user);
     const current = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!current) throw new NotFoundException('Задача не найдена');
+
+    const viewerSelf = this.isViewerEditingOwnTasks(user, current.employeeId);
+    if (viewerSelf) {
+      if (dto.title !== undefined || dto.description !== undefined || dto.taskDate !== undefined) {
+        throw new ForbiddenException('Можно менять только отметки по дням недели');
+      }
+      if (dto.days === undefined) {
+        throw new BadRequestException('Укажите поле days');
+      }
+    } else {
+      this.ensureWriteRole(user);
+    }
+
     const base = {
       mon: current.mon,
       tue: current.tue,

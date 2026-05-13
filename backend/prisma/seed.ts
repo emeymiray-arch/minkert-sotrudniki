@@ -84,6 +84,11 @@ async function main(): Promise<void> {
   const elena = emp[0]!;
   const oleg = emp[1]!;
 
+  await prisma.user.update({
+    where: { email: 'view@minkert.local' },
+    data: { linkedEmployeeId: elena.id },
+  });
+
   await prisma.task.createMany({
     data: [
       {
@@ -144,6 +149,7 @@ main()
     console.log('[seed] готово.');
     console.log('  Логины: admin@minkert.local, lead@minkert.local, view@minkert.local');
     console.log('  Пароль: Demo123!');
+    console.log('  У view@minkert.local привязана карточка первого сотрудника — можно менять дни в её задачах.');
   })
   .catch((e: unknown) => {
     console.error(e);

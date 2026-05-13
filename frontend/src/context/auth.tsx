@@ -1,7 +1,14 @@
 import * as React from 'react';
 
-import { login as loginApi, logout as logoutApi } from '@/lib/http';
-import { clearAuthBundle, getAccessToken, readStoredUser, setStoredUser } from '@/lib/storage';
+import { apiJson, login as loginApi, logout as logoutApi } from '@/lib/http';
+import {
+  AUTH_SESSION_LOST_EVENT,
+  clearAuthBundle,
+  getAccessToken,
+  getRefreshToken,
+  readStoredUser,
+  setStoredUser,
+} from '@/lib/storage';
 import type { AuthUser } from '@/lib/types';
 
 type AuthContextValue = {
@@ -20,15 +27,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AuthUser | null>(() => readStoredUser<AuthUser>());
 
   React.useEffect(() => {
+    const onSessionLost = () => setUser(null);
+    window.addEventListener(AUTH_SESSION_LOST_EVENT, onSessionLost);
+    return () => window.removeEventListener(AUTH_SESSION_LOST_EVENT, onSessionLost);
+  }, []);
+
+  React.useEffect(() => {
     const token = getAccessToken();
     const restored = readStoredUser<AuthUser>();
     if (!token || !restored) {
       clearAuthBundle();
       setUser(null);
-    } else {
-      setUser(restored);
+      setBooting(false);
+      return;
     }
+    setUser(restored);
     setBooting(false);
+
+    void apiJson<AuthUser>('/users/me')
+      .then((me) => {
+        setStoredUser(me);
+        setUser(me);
+      })
+      .catch(() => {
+        if (!getAccessToken() && !getRefreshToken()) {
+          setUser(null);
+        }
+      });
   }, []);
 
   const login = React.useCallback(async (email: string, password: string) => {

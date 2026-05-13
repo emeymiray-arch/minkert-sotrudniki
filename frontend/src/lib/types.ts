@@ -7,6 +7,8 @@ export type AuthUser = {
   email: string;
   name: string;
   role: UserRole;
+  /** Карточка сотрудника: при роли VIEWER можно менять дни в задачах только у этой карточки. */
+  linkedEmployeeId?: string | null;
 };
 
 export type Employee = {

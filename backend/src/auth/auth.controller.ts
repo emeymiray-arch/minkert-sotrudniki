@@ -57,6 +57,7 @@ export class AuthController {
       password: dto.password,
       name: dto.name,
       role,
+      linkedEmployeeId: dto.linkedEmployeeId,
     });
   }
 }

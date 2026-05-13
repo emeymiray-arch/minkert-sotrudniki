@@ -70,4 +70,4 @@
 
 ### Выкладывание в интернет (Vercel + Render + Neon)
 
-Пошаговая инструкция: **[DEPLOY.md](./DEPLOY.md)**. В корне есть **`render.yaml`** для быстрого создания API на Render.
+Пошаговая инструкция: **[DEPLOY.md](./DEPLOY.md)** (в начале — **почему Vercel без `VITE_API_URL` ломается** и чеклист). Шаблон переменных для API: **`backend/.env.production.example`**. В корне есть **`render.yaml`** для Render.

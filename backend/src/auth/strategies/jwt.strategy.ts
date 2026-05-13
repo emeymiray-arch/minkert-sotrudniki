@@ -9,6 +9,7 @@ interface JwtValidated {
   sub: string;
   email: string;
   role: UserRole;
+  linkedEmployeeId?: string | null;
 }
 
 @Injectable()
@@ -26,6 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: payload.sub,
       email: payload.email,
       role: payload.role,
+      linkedEmployeeId: payload.linkedEmployeeId ?? null,
     };
   }
 }
