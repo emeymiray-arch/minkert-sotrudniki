@@ -1,24 +1,31 @@
 /**
- * Прокси API на Vercel: браузер ходит на тот же домен `/api/...`, эта Edge-функция
- * пересылает запрос на Render/Railway. В Vercel → Settings → Environment Variables:
- * MINKERT_BACKEND_ORIGIN = https://ваш-сервис.onrender.com (без /api в конце).
+ * Прокси `/api/*` → бэкенд (Nest). Для Vite на Vercel надёжнее, чем только `api/[...path].ts`.
+ * Переменная: MINKERT_BACKEND_ORIGIN = https://ваш-сервис.onrender.com (без /api; если указали /api — отрежем).
  */
-export const config = { runtime: 'edge' };
+export const config = {
+  matcher: '/api/:path*',
+};
 
 function readBackendOrigin(): string | undefined {
   const proc = (globalThis as Record<string, unknown>).process as
     | { env?: Record<string, string | undefined> }
     | undefined;
-  return proc?.env?.MINKERT_BACKEND_ORIGIN?.trim().replace(/\/$/, '');
+  const raw = proc?.env?.MINKERT_BACKEND_ORIGIN?.trim();
+  if (!raw) return undefined;
+  let o = raw.replace(/\/$/, '');
+  if (o.endsWith('/api')) {
+    o = o.slice(0, -4).replace(/\/$/, '');
+  }
+  return o;
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export default async function middleware(request: Request): Promise<Response> {
   const origin = readBackendOrigin();
   if (!origin) {
     return new Response(
       JSON.stringify({
         message:
-          'На Vercel не задан MINKERT_BACKEND_ORIGIN. Откройте проект → Settings → Environment Variables → Add: имя MINKERT_BACKEND_ORIGIN, значение адрес вашего API без /api (например https://minkert-xxxx.onrender.com) → Save → вкладка Deployments → у последнего деплоя кнопка Redeploy.',
+          'Не задан MINKERT_BACKEND_ORIGIN. Vercel → Project → Settings → Environment Variables: добавьте MINKERT_BACKEND_ORIGIN = https://ваш-api.onrender.com (без /api в конце) → Redeploy.',
       }),
       { status: 503, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
     );
