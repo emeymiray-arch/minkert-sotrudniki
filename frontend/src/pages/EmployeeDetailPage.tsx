@@ -215,9 +215,9 @@ export default function EmployeeDetailPage() {
   const canEdit = canEditTaskDays(user, id);
   const canMeta = canManageTasks(user);
 
-  const copyDiaryUrl = async (token: string) => {
+  const copyPublicUrl = async (path: 'd' | 't', token: string) => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/d/${token}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/${path}/${token}`);
       toast.success('Ссылка скопирована');
     } catch {
       toast.error('Не удалось скопировать');
@@ -448,8 +448,8 @@ export default function EmployeeDetailPage() {
 
         <Card className="min-w-0 overflow-hidden">
           <CardHeader
-            title="Дневник"
-            description="Сотрудник отмечает день по личной ссылке без входа. Здесь — последние три недели."
+            title="Ссылки для сотрудника"
+            description="Дневник — свободные строки за день. Задачи — то, что вы задали в таблице недели; сотрудник отмечает выбранный день без входа. Один токен для обеих ссылок."
           />
           <div className="space-y-4 px-4 pb-6">
             {canMeta ?
@@ -458,21 +458,35 @@ export default function EmployeeDetailPage() {
                   Ссылка для сотрудника
                 </div>
                 {employee.data?.diaryToken ?
-                  <div className="mt-2 space-y-2">
-                    <Input
-                      readOnly
-                      className="font-mono text-[12px] sm:text-[13px]"
-                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${employee.data.diaryToken}`}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => void copyDiaryUrl(employee.data!.diaryToken!)}>
-                        Копировать
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" disabled={diaryTokenMutation.isPending} onClick={() => diaryTokenMutation.mutate()}>
-                        Новая ссылка
+                  <div className="mt-2 space-y-4">
+                    <div className="space-y-1.5">
+                      <div className="text-[11px] font-medium text-zinc-700 dark:text-white/65">Задачи недели (как в программе)</div>
+                      <Input
+                        readOnly
+                        className="font-mono text-[12px] sm:text-[13px]"
+                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/t/${employee.data.diaryToken}`}
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => void copyPublicUrl('t', employee.data!.diaryToken!)}>
+                        Копировать ссылку на задачи
                       </Button>
                     </div>
-                    <p className="text-[11px] text-muted dark:text-white/45">«Новая ссылка» отключает предыдущую.</p>
+                    <div className="space-y-1.5 border-t border-stroke/60 pt-3 dark:border-white/10">
+                      <div className="text-[11px] font-medium text-zinc-700 dark:text-white/65">Дневник (свободные строки)</div>
+                      <Input
+                        readOnly
+                        className="font-mono text-[12px] sm:text-[13px]"
+                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${employee.data.diaryToken}`}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => void copyPublicUrl('d', employee.data!.diaryToken!)}>
+                          Копировать ссылку на дневник
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" disabled={diaryTokenMutation.isPending} onClick={() => diaryTokenMutation.mutate()}>
+                          Новая ссылка
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted dark:text-white/45">«Новая ссылка» отключает предыдущие ссылки и дневника, и задач.</p>
                   </div>
                 : (
                   <Button type="button" className="mt-2" size="sm" disabled={diaryTokenMutation.isPending} onClick={() => diaryTokenMutation.mutate()}>

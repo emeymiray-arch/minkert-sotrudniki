@@ -18,7 +18,7 @@ export type Employee = {
   status: EmployeeStatus;
   createdAt: string;
   updatedAt: string;
-  /** Секрет для ссылки /d/:token (только у кого выпущена ссылка). */
+  /** Секрет для публичных ссылок /d/:token (дневник) и /t/:token (задачи недели). */
   diaryToken?: string | null;
   _count?: { tasks: number };
 };

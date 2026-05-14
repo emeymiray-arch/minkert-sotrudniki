@@ -11,6 +11,7 @@ import EmployeeDetailPage from '@/pages/EmployeeDetailPage';
 import EmployeesPage from '@/pages/EmployeesPage';
 import LoginPage from '@/pages/LoginPage';
 import PublicDiaryPage from '@/pages/PublicDiaryPage';
+import PublicEmployeeTasksPage from '@/pages/PublicEmployeeTasksPage';
 import SettingsPage from '@/pages/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/d/:token" element={<PublicDiaryPage />} />
+            <Route path="/t/:token" element={<PublicEmployeeTasksPage />} />
 
             <Route element={<ProtectedLayout />}>
               <Route index element={<DashboardPage />} />

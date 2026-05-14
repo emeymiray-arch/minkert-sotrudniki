@@ -19,3 +19,10 @@ export const WEEK_DAY_LABEL_RU = [
   'СБ',
   'ВС',
 ] as const;
+
+/** getUTCDay(): 0=Вс … 6=Сб → ключ колонки задачи (как в Prisma). */
+export function utcDateToWeekDayDb(d: Date): WeekDayDb {
+  const w = d.getUTCDay();
+  const map: WeekDayDb[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  return map[w]!;
+}
