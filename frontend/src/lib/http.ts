@@ -170,7 +170,11 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
   if (!response.ok) {
     let message = `Ошибка ${response.status}`;
     if (response.status === 502 || response.status === 503 || response.status === 504) {
-      message = 'Бэкенд не отвечает (502/503 от прокси).' + connectionErrorSuffix();
+      message =
+        'Ответ с ошибкой ' +
+        response.status +
+        ': это обычно Render (ваш API), а не Vercel. На бесплатном плане сервис «засыпает»: зайдите на render.com → ваш Web Service → Open app, подождите до минуты, снова откройте сайт на Vercel. Проверьте в новой вкладке тот же хост, что в MINKERT_BACKEND_ORIGIN, с путём /api/health. В Render откройте Logs — если процесс падает (нет DATABASE_URL и т.д.). MINKERT_BACKEND_ORIGIN = только https://….onrender.com без /api в конце. Обход прокси: переменная VITE_API_URL=https://….onrender.com/api, удалите MINKERT_BACKEND_ORIGIN, Redeploy; на Render в CORS_ORIGIN укажите URL сайта Vercel.' +
+        (isLocalPage() ? LOCAL_DEV_HINT : '');
     } else {
       try {
         const body = (await response.json()) as { message?: string | string[] };

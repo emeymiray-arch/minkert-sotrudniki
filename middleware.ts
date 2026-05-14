@@ -14,6 +14,21 @@ export const config = {
   matcher: ['/api/:path*', '/api'],
 };
 
+/** Render free tier «засыпает» — дефолтный fetch на Edge может оборваться раньше, чем Nest поднимется. */
+const UPSTREAM_FETCH_MS = 55_000;
+
+async function fetchUpstream(targetUrl: string, init: RequestInit): Promise<Response | null> {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), UPSTREAM_FETCH_MS);
+  try {
+    return await fetch(targetUrl, { ...init, signal: c.signal, redirect: 'manual' });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function readBackendOrigin(): string | undefined {
   const proc = (globalThis as Record<string, unknown>).process as
     | { env?: Record<string, string | undefined> }
@@ -65,7 +80,16 @@ export default async function middleware(request: Request): Promise<Response> {
   const buf = hasBody ? await request.arrayBuffer() : undefined;
   const body = buf && buf.byteLength > 0 ? buf : undefined;
 
-  const upstream = await fetch(targetUrl, { method, headers, body, redirect: 'manual' });
+  const upstream = await fetchUpstream(targetUrl, { method, headers, body });
+  if (!upstream) {
+    return new Response(
+      JSON.stringify({
+        message:
+          'Таймаут при обращении к API на Render (часто бесплатный план: сервис «спит» до ~1 мин). Зайдите на render.com → ваш Web Service → Open app, подождите, затем обновите сайт. Либо откройте в браузере …onrender.com/api/health.',
+      }),
+      { status: 504, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
+    );
+  }
 
   const out = new Headers();
   upstream.headers.forEach((value, key) => {

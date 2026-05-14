@@ -131,6 +131,12 @@ Render здесь нужен **только как хост для API** (лог
 
 В **Environment Variables** задайте при сборке **`VITE_API_URL`** = `https://ВАШ-API.onrender.com/api` (с **`https`** и с **`/api`**). Тогда **`MINKERT_BACKEND_ORIGIN`** не нужен; на Render в **`CORS_ORIGIN`** укажите URL сайта Vercel.
 
+**Если на Vercel видите 502/503 при входе:** чаще всего «спит» бесплатный API на Render — откройте [dashboard.render.com](https://dashboard.render.com) → ваш сервис → **Open app**, подождите до минуты, обновите сайт на Vercel. Либо откройте в браузере `https://ваш-сервис.onrender.com/api/health` — должен быть JSON с `"ok":true`.
+
+### Если на Vercel 502/503 при входе
+
+Чаще всего «спит» бесплатный API на **Render**: [dashboard.render.com](https://dashboard.render.com) → ваш **Web Service** → **Open app**, подождите до минуты, снова откройте сайт на Vercel. Проверьте в браузере `https://ваш-сервис.onrender.com/api/health` — должен быть JSON с `"ok":true`. Если нет — смотрите **Logs** на Render (часто нет `DATABASE_URL` или не прошли миграции).
+
 **Не задавайте одновременно** `MINKERT_BACKEND_ORIGIN` и `VITE_API_URL` с разными хостами: если задан `VITE_API_URL`, браузер ходит на него напрямую, прокси не используется.
 
 ---
