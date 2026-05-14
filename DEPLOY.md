@@ -103,37 +103,35 @@ npx prisma db seed
 
 ## 3. Сайт на Vercel
 
-### Вариант «только кнопки» (рекомендуется)
+Render здесь нужен **только как хост для API** (логин и данные без него не заработают). Вам не нужно «уметь Render»: достаточно **один раз** создать сервис по разделу 2 выше и **скопировать его URL** (строка в браузере вида `https://…onrender.com`) в переменную Vercel ниже.
 
-Не нужно знать командную строку: фронт шлёт запросы на `/api`, а **Edge Middleware** (`frontend/middleware.ts` в репозитории) на Vercel пересылает их на Render.
+### Рекомендуемый способ (меньше 404 на `/api`)
 
-1. Зайдите на [https://vercel.com](https://vercel.com) и войдите (часто через GitHub).
-2. **Add New… → Project** → выберите **тот же репозиторий**, что и для Render.
-3. В настройках импорта:
-   - **Root Directory:** нажите **Edit** и укажите папку **`frontend`**
-   - **Framework Preset:** Vite (или подставится сам)
-   - **Build Command:** `npm run build`
-   - **Output Directory:** `dist`
-4. Разверните блок **Environment Variables** (перед первым деплоем или потом в Settings):
-   - кнопка **Add** (или **Add Another**)
+В репозитории в **корне** лежат `vercel.json` и `middleware.ts` — Vercel ищет middleware **рядом с тем `package.json`, который считается корнем проекта**. Проще всего привязать **весь репозиторий**, а не только папку `frontend`.
+
+1. [vercel.com](https://vercel.com) → импортируйте репозиторий.
+2. В шаге настройки (или позже: **Settings → General → Root Directory**):
+   - поле **Root Directory** **очистите** (оставьте **пустым** — корень репозитория),  
+   - **не** указывайте `frontend`.
+3. Сборка подставится из корневого `vercel.json`: установка зависимостей в `frontend`, `npm run build` там же, выходная папка **`frontend/dist`**.
+4. **Environment Variables** → **Add**:
    - **Key:** `MINKERT_BACKEND_ORIGIN`
-   - **Value:** адрес API **без** `/api` на конце, например `https://minkert-api-xxxx.onrender.com` (ровно тот хост, где открывается `/api/health`).
-   - окружения: отметьте **Production** (и **Preview**, если пользуетесь превью-деплоями).
-5. Нажмите **Deploy** и дождитесь зелёной галочки. Если проект уже был создан: **Settings → Environment Variables** → добавьте переменную → вкладка **Deployments** → у последнего деплоя **⋯ → Redeploy** (без этого новая переменная не подхватится).
+   - **Value:** `https://minkert-api-xxxx.onrender.com` (**без** `/api` в конце — это только хост сервиса из Render).
+5. **Deploy** / **Redeploy** (при смене переменных — с **Clear build cache**).
 
-Потом в **Render** в переменной **`CORS_ORIGIN`** укажите URL сайта Vercel (например `https://minkert.vercel.app`), сохраните и при необходимости сделайте **Manual Deploy** API.
+На **Render** в сервисе API в **`CORS_ORIGIN`** укажите URL сайта Vercel (например `https://ваш-проект.vercel.app`), сохраните и при необходимости **Manual Deploy** — иначе браузер может блокировать ответы API.
+
+Проверка: откройте в браузере `https://ваш-сайт.vercel.app/api/health` — должен быть JSON с полем `ok` (не страница 404 Vercel). Если 404 — middleware не сработал: проверьте п.2 (корень репозитория) и что переменная задана.
+
+### Если проект уже создан с Root Directory = `frontend`
+
+Так тоже можно: тогда используются **`frontend/middleware.ts`** и **`frontend/vercel.json`**. В настройках сборки укажите **Build Command:** `npm run build`, **Output Directory:** `dist`, **Root Directory:** `frontend`. Переменная **`MINKERT_BACKEND_ORIGIN`** всё равно обязательна.
+
+### Вариант без прокси (только Vercel + одна переменная)
+
+В **Environment Variables** задайте при сборке **`VITE_API_URL`** = `https://ВАШ-API.onrender.com/api` (с **`https`** и с **`/api`**). Тогда **`MINKERT_BACKEND_ORIGIN`** не нужен; на Render в **`CORS_ORIGIN`** укажите URL сайта Vercel.
 
 **Не задавайте одновременно** `MINKERT_BACKEND_ORIGIN` и `VITE_API_URL` с разными хостами: если задан `VITE_API_URL`, браузер ходит на него напрямую, прокси не используется.
-
-### Вариант через VITE_API_URL (как раньше)
-
-Если хотите, чтобы браузер ходил на API **напрямую** (без прокси на Vercel), в **Environment Variables** задайте при сборке:
-
-| Name | Value |
-|------|--------|
-| `VITE_API_URL` | `https://ВАШ-API.onrender.com/api` |
-
-Тогда **`MINKERT_BACKEND_ORIGIN`** не нужен. На Render в **`CORS_ORIGIN`** всё равно должен быть URL вашего сайта на Vercel.
 
 ---
 

@@ -1,10 +1,14 @@
 /**
- * Прокси `/api/*` → Nest. Используется, если в Vercel **Root Directory = `frontend`**.
- * Если Root Directory **пустой** (корень репозитория), используется `../middleware.ts`.
+ * Прокси `/api/*` → Nest на Render/Railway. Должен лежать в **корне Git-репозитория**
+ * рядом с корневым `package.json`, иначе Vercel может не подхватить middleware.
  *
- * MINKERT_BACKEND_ORIGIN = https://....onrender.com (без /api)
+ * Vercel → Settings → Environment Variables:
+ *   MINKERT_BACKEND_ORIGIN = https://xxxx.onrender.com  (без /api в конце)
  *
- * Синхронизируйте правки с корневым `middleware.ts`.
+ * В настройках проекта Vercel поле **Root Directory** оставьте **пустым** (корень репо)
+ * и используйте корневой `vercel.json` — см. DEPLOY.md.
+ *
+ * Копия логики синхронизирована с `frontend/middleware.ts`.
  */
 export const config = {
   matcher: ['/api/:path*', '/api'],
@@ -29,7 +33,7 @@ export default async function middleware(request: Request): Promise<Response> {
     return new Response(
       JSON.stringify({
         message:
-          'Не задан MINKERT_BACKEND_ORIGIN. Vercel → Settings → Environment Variables → добавьте MINKERT_BACKEND_ORIGIN = https://ваш-api.onrender.com (без /api) → Redeploy.',
+          'Не задан MINKERT_BACKEND_ORIGIN. Vercel → Settings → Environment Variables → добавьте MINKERT_BACKEND_ORIGIN = https://ваш-api.onrender.com (без /api) → Redeploy. Адрес API один раз копируется из Render (страница сервиса → URL).',
       }),
       { status: 503, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
     );

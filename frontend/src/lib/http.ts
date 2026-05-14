@@ -15,7 +15,7 @@ function isLocalPage(): boolean {
 
 /**
  * База API: в `npm run dev` без `VITE_API_DIRECT` — `/api` (прокси Vite → :3000).
- * На проде по умолчанию `/api` (на Vercel — Edge `middleware.ts` + `MINKERT_BACKEND_ORIGIN`).
+ * На проде по умолчанию `/api` (на Vercel — `middleware.ts` в корне репо или в `frontend/` + `MINKERT_BACKEND_ORIGIN`).
  * `VITE_API_URL` при сборке; на **хостинге** значения с localhost или `http://` на https-странице игнорируются.
  */
 function resolveApiBase(): string {
@@ -57,7 +57,7 @@ function connectionTroubleshootHint(): string {
     return ' В Vercel → Settings → Environment Variables: удалите ошибочный VITE_API_URL с localhost. Задайте VITE_API_URL = https://ваш-api.onrender.com/api (обязательно https) или только MINKERT_BACKEND_ORIGIN = https://ваш-api.onrender.com (без /api) и сделайте Redeploy (лучше с галочкой Clear build cache).';
   }
   if (API_BASE === '/api' || API_BASE.endsWith('/api')) {
-    return ' В Vercel → Settings → Environment Variables: MINKERT_BACKEND_ORIGIN = https://ваш-сервис.onrender.com (без /api), сохраните → Deployments → Redeploy. В репозитории должен быть файл frontend/middleware.ts. Если задан VITE_API_URL с localhost или с http:// — удалите или замените на https://…/api.';
+    return ' В Vercel → Settings → Environment Variables: MINKERT_BACKEND_ORIGIN = https://ваш-сервис.onrender.com (без /api), сохраните → Deployments → Redeploy. В General очистите Root Directory (корень репозитория), чтобы работал корневой middleware.ts; либо оставьте Root = frontend и файл frontend/middleware.ts. Если задан VITE_API_URL с localhost или с http:// — удалите или замените на https://…/api.';
   }
   return '';
 }
@@ -195,7 +195,7 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
       'Сервер вернул не JSON (часто это HTML вместо API — например SPA без прокси `/api`).' +
         (isLocalPage() ?
           LOCAL_DEV_HINT + ' В dev: бэкенд на порту 3000, запросы на `/api` через Vite.'
-        : ' На Vercel: проверьте MINKERT_BACKEND_ORIGIN (URL Render без /api в конце) и Redeploy с Clear build cache; либо VITE_API_URL = https://…/api. В репозитории должен быть frontend/middleware.ts.'),
+        : ' На Vercel: проверьте MINKERT_BACKEND_ORIGIN и Redeploy с Clear build cache; либо VITE_API_URL = https://…/api. Root Directory: пусто (корень репо + middleware.ts) или frontend (frontend/middleware.ts).'),
     );
   }
 }
