@@ -1,17 +1,34 @@
 # Выкладываем Minkert в интернет
 
+## Быстрый старт: пробуем в интернет (Neon + Render + Vercel)
+
+Сделайте по порядку. **Платить не обязательно** — Neon и Render можно на **free**, у Vercel тоже есть бесплатный план.
+
+1. **Neon (база)** — [neon.tech](https://neon.tech) → проект → скопируйте **Connection string** → это будет `DATABASE_URL`.
+2. **Render (API)** — [render.com](https://render.com) → войти через GitHub → **New +** → **Blueprint** → выберите **этот репозиторий** и файл **`render.yaml`** в корне → подтвердите создание.
+3. В Render в созданном **Web Service** откройте **Environment** и задайте:
+   - **`DATABASE_URL`** — строка из Neon;
+   - **`JWT_ACCESS_SECRET`** — любая длинная случайная строка (можно сгенерировать: `openssl rand -hex 32` на своём компьютере);
+   - **`CORS_ORIGIN`** — пока заглушка, **после шага 7 замените** на URL сайта с Vercel (например `https://ваш-проект.vercel.app`).
+4. Дождитесь зелёного деплоя. Нажмите **Open app** или откройте **`https://…onrender.com/api/health`** — должен быть JSON с `"ok": true` (первый раз после «сна» free‑плана подождите до ~1 мин).
+5. В Render → ваш сервис → **Shell** выполните один раз: `npx prisma db seed` — появятся демо-пользователи (логин **`admin@minkert.local`**, пароль **`Demo123!`**).
+6. Скопируйте **URL сервиса** вида `https://minkert-api-xxxx.onrender.com` (**без** `/api` в конце).
+7. **Vercel** — [vercel.com](https://vercel.com) → импорт **того же репозитория** → **Root Directory оставьте пустым** (корень репо, чтобы подхватились корневой `vercel.json` и `middleware.ts`) → **Deploy**.
+8. В Vercel → **Settings** → **Environment Variables** → **`MINKERT_BACKEND_ORIGIN`** = URL из шага 6 (**без** `/api`) → **Save** → **Deployments** → **Redeploy**.
+9. В **Render** → **Environment** → **`CORS_ORIGIN`** замените на **точный** URL сайта Vercel → сохраните → при необходимости **Manual Deploy** API.
+10. Откройте сайт Vercel, войдите: **`admin@minkert.local`** / **`Demo123!`**.
+
+**Альтернатива без прокси:** вместо `MINKERT_BACKEND_ORIGIN` задайте **`VITE_API_URL`** = `https://ваш-api.onrender.com/api` (с **`https`** и с **`/api`**) и сделайте **Redeploy** — не задавайте оба варианта с разными хостами.
+
+Подробности — в разделах ниже.
+
+---
+
 ## Почему на Vercel пишет «Запустите backend…»
 
-Сборка Vite **вшивает** адрес API на момент `npm run build`. Если в Vercel **не задана** переменная **`VITE_API_URL`**, в продакшене используется запасной вариант **`http://localhost:3000/api`** — в браузере пользователя **нет** вашего локального Nest, поэтому запрос падает и показывается сообщение про backend.
+Сайт на Vercel — это **фронт**. Логин и данные идут в **API** (Nest), который должен быть **в интернете** (например Render). Если API не задеплоен или в Vercel не задан адрес (`MINKERT_BACKEND_ORIGIN` или `VITE_API_URL`), запросы не доходят до Nest.
 
-**Что сделать:**
-
-1. Задеплойте API на Render / Railway (см. ниже) и скопируйте публичный URL, например `https://minkert-api-xxxx.onrender.com`.
-2. В **Vercel** → ваш проект → **Settings** → **Environment Variables**:
-   - **Name:** `VITE_API_URL`
-   - **Value:** `https://minkert-api-xxxx.onrender.com/api` (обязательно суффикс **`/api`** — у Nest глобальный префикс).
-   - Окружения: **Production** (и **Preview**, если нужно).
-3. **Deployments** → последний деплой → **⋯** → **Redeploy** (или новый push), чтобы **пересобрать** фронт с новой переменной.
+**Что сделать:** пройдите **«Быстрый старт»** выше; либо задайте **`VITE_API_URL`** = `https://ваш-api.onrender.com/api` и сделайте **Redeploy** фронта (переменные `VITE_*` попадают в сборку только при новом деплое).
 
 Переменные `VITE_*` не подхватываются «на лету» после сборки — только **пересборка**.
 
