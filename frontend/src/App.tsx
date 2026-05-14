@@ -10,6 +10,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import EmployeeDetailPage from '@/pages/EmployeeDetailPage';
 import EmployeesPage from '@/pages/EmployeesPage';
 import LoginPage from '@/pages/LoginPage';
+import PublicDiaryPage from '@/pages/PublicDiaryPage';
 import SettingsPage from '@/pages/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -54,6 +55,7 @@ export default function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/d/:token" element={<PublicDiaryPage />} />
 
             <Route element={<ProtectedLayout />}>
               <Route index element={<DashboardPage />} />

@@ -1,5 +1,6 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// @ts-nocheck — конфиг Node; без отдельной установки @types/node в CI
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';

@@ -7,23 +7,24 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
+import { TaskDayScoreCell } from '@/components/tasks/TaskDayScoreCell';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { utcMondayIso } from '@/lib/date';
 import { apiJson } from '@/lib/http';
 import { ruEmployeeStatus } from '@/lib/format';
-import { DAY_KEYS, DAY_LABEL_RU, nextStatus } from '@/lib/task-days';
-import type { DayKey } from '@/lib/task-days';
+import { DAY_HEADER_CELL_CLASS, DAY_KEYS, DAY_LABEL_RU, DAY_MATRIX_CORNER_CLASS, nextStatus, WEEK_MATRIX_GRID_CLASS, type DayKey } from '@/lib/task-days';
 import type { EmployeeStatus, EmployeeListItem, Task, UserRole } from '@/lib/types';
 import { motion } from 'framer-motion';
-import { LayoutGrid, List, Trash2 } from 'lucide-react';
+import { LayoutGrid, List, Pencil, Trash2 } from 'lucide-react';
 
 import { useAuth } from '@/context/auth';
-import { canEditTaskDays } from '@/lib/taskPermissions';
+import { canEditTaskDays, canManageTasks } from '@/lib/taskPermissions';
 
 type EmployeeOverview = {
   streakWeeks: number;
@@ -32,6 +33,15 @@ type EmployeeOverview = {
   monthlyEfficiency: number;
   periodEfficiency: number;
 };
+
+function formatTaskDate(raw: unknown) {
+  if (typeof raw === 'string') return raw.slice(0, 10);
+  try {
+    return new Date(raw as Date).toISOString().slice(0, 10);
+  } catch {
+    return String(raw);
+  }
+}
 
 function statusTone(status: EmployeeStatus): BadgeTone {
   if (status === 'ACTIVE') return 'success';
@@ -57,6 +67,12 @@ export default function EmployeesPage() {
   const [newName, setNewName] = React.useState('');
   const [newPosition, setNewPosition] = React.useState('');
 
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editTaskId, setEditTaskId] = React.useState<string | null>(null);
+  const [editTitle, setEditTitle] = React.useState('');
+  const [editDescription, setEditDescription] = React.useState('');
+  const [editTaskDate, setEditTaskDate] = React.useState(utcMondayIso());
+
   const queryString = React.useMemo(() => {
     const params = new URLSearchParams();
     if (dq.trim()) params.set('q', dq.trim());
@@ -72,24 +88,21 @@ export default function EmployeesPage() {
     queryFn: () => apiJson<{ items: EmployeeListItem[] }>(`/employees${queryString}`),
   });
 
-  const featuredEmployees = React.useMemo(
-    () => (employees.data?.items ?? []).filter((x) => x.status === 'ACTIVE').slice(0, 4),
-    [employees.data?.items],
-  );
+  const items = employees.data?.items ?? [];
 
-  const featuredTasks = useQueries({
-    queries: featuredEmployees.map((employee) => ({
+  const boardTasks = useQueries({
+    queries: items.map((employee) => ({
       queryKey: ['employee-tasks', employee.id],
       queryFn: () => apiJson<Task[]>(`/employees/${employee.id}/tasks`),
-      enabled: featuredEmployees.length > 0,
+      enabled: items.length > 0,
     })),
   });
 
-  const featuredOverviews = useQueries({
-    queries: featuredEmployees.map((employee) => ({
+  const boardOverviews = useQueries({
+    queries: items.map((employee) => ({
       queryKey: ['employee-overview', employee.id],
       queryFn: () => apiJson<EmployeeOverview>(`/analytics/employees/${employee.id}/overview`),
-      enabled: featuredEmployees.length > 0,
+      enabled: items.length > 0,
     })),
   });
 
@@ -160,6 +173,36 @@ export default function EmployeesPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось сохранить балл'),
   });
 
+  const updateTaskMeta = useMutation({
+    mutationFn: async (payload: { taskId: string; title: string; description: string; taskDate: string }) =>
+      apiJson<Task>(`/tasks/${payload.taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: payload.title.trim(),
+          description: payload.description.trim(),
+          taskDate: payload.taskDate,
+        }),
+      }),
+    onSuccess: async () => {
+      toast.success('Задача обновлена');
+      setEditOpen(false);
+      setEditTaskId(null);
+      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось сохранить'),
+  });
+
+  const deleteTask = useMutation({
+    mutationFn: (taskId: string) => apiJson(`/tasks/${taskId}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      toast.success('Задача удалена');
+      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось удалить задачу'),
+  });
+
   const bulkStatus = useMutation({
     mutationFn: async ({ status }: { status: EmployeeStatus }) => {
       const ids = Object.entries(selected).filter(([, ok]) => ok).map(([id]) => id);
@@ -182,11 +225,33 @@ export default function EmployeesPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка массового обновления'),
   });
 
-  const items = employees.data?.items ?? [];
   const anySelected = Object.values(selected).some(Boolean);
 
   const toggleSelected = (id: string, v: boolean) => {
     setSelected((prev) => ({ ...prev, [id]: v }));
+  };
+
+  const openEditTask = (t: Task) => {
+    setEditTaskId(t.id);
+    setEditTitle(t.title);
+    setEditDescription(t.description ?? '');
+    setEditTaskDate(formatTaskDate(t.taskDate));
+    setEditOpen(true);
+  };
+
+  const submitEditTask = () => {
+    if (!editTaskId) return;
+    const t = editTitle.trim();
+    if (t.length < 1) {
+      toast.error('Укажите название задачи');
+      return;
+    }
+    updateTaskMeta.mutate({
+      taskId: editTaskId,
+      title: t,
+      description: editDescription,
+      taskDate: editTaskDate,
+    });
   };
 
   const table = (
@@ -305,41 +370,43 @@ export default function EmployeesPage() {
     { border: 'border-amber-400/45', bg: 'bg-amber-500/12', dot: 'bg-amber-400' },
   ] as const;
 
-  const featuredBoard = (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-muted dark:text-white/55">
-          4 персональных блока с разными цветами: задачи, дни недели, и оценка 0/1/2 прямо на одной странице.
-        </div>
+  const employeesBoard = (
+    <div className="space-y-6">
+      <div className="text-sm text-muted dark:text-white/55">
+        Все сотрудники из текущего списка (с учётом фильтров) — по одному на строку, на всю ширину: задачи, ПН–ВС, аналитика.
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {featuredEmployees.map((employee, idx) => {
-          const taskQuery = featuredTasks[idx];
-          const overviewQuery = featuredOverviews[idx];
-          const taskList = taskQuery?.data ?? [];
-          const latestTask = taskList[0];
-          const palette = featuredPalette[idx % featuredPalette.length];
+      {items.map((employee, idx) => {
+        const taskQuery = boardTasks[idx];
+        const overviewQuery = boardOverviews[idx];
+        const taskList = taskQuery?.data ?? [];
+        const palette = featuredPalette[idx % featuredPalette.length];
+        const canEditThis = canEditTaskDays(user, employee.id);
+        const canMeta = canManageTasks(user);
+        const taskMutating = patchTaskDay.isPending || updateTaskMeta.isPending || deleteTask.isPending;
 
-          return (
-            <div
-              key={employee.id}
-              className={`rounded-xl border p-4 ${palette.border} ${palette.bg}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`size-2.5 rounded-full ${palette.dot}`} />
-                    <div className="text-lg font-semibold text-zinc-900 dark:text-white">
-                      {employee.name}
+        return (
+          <div
+            key={employee.id}
+            className={`w-full rounded-xl border p-4 sm:p-5 ${palette.border} ${palette.bg}`}
+          >
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`size-2.5 shrink-0 rounded-full ${palette.dot}`} />
+                      <div className="text-xl font-bold leading-tight tracking-tight text-zinc-900 dark:text-white sm:text-2xl">
+                        {employee.name}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-sm text-muted dark:text-white/55">{employee.position}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge tone={statusTone(employee.status)}>{ruEmployeeStatus(employee.status)}</Badge>
+                      <Badge tone="neutral">
+                        KPI: {(employee.kpiWeeklyRounded ?? Math.round(employee.kpiWeekly ?? 0)).toFixed(0)}%
+                      </Badge>
                     </div>
                   </div>
-                  <div className="text-sm text-muted">{employee.position}</div>
-                </div>
-                <div className="flex flex-shrink-0 flex-col items-end gap-2">
-                  <Badge tone={statusTone(employee.status)}>
-                    KPI: {(employee.kpiWeeklyRounded ?? Math.round(employee.kpiWeekly ?? 0)).toFixed(0)}%
-                  </Badge>
-                  <div className="flex flex-wrap justify-end gap-2">
+                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
                     <Button variant="outline" size="sm" asChild>
                       <Link to={`/employees/${employee.id}`}>Профиль</Link>
                     </Button>
@@ -361,94 +428,134 @@ export default function EmployeesPage() {
                     : null}
                   </div>
                 </div>
-              </div>
 
-              {taskQuery?.isLoading ? (
-                <Skeleton className="mt-4 h-[108px]" />
-              ) : latestTask ? (
-                <div className="mt-4 space-y-3">
-                  <div className="rounded-xl border border-stroke bg-white/50 p-3 dark:border-white/10 dark:bg-white/5">
-                    <div className="text-sm font-semibold text-zinc-900 dark:text-white">
-                      {latestTask.title}
-                    </div>
-                    <div className="mt-1 text-xs text-muted">
-                      {latestTask.description || 'Описание не заполнено'}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-2">
-                    {DAY_KEYS.map((day, dayIdx) => {
-                      const value = Number((latestTask as unknown as Record<string, unknown>)[day] ?? 0);
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          disabled={!canEditTaskDays(user, employee.id) || patchTaskDay.isPending}
-                          onClick={() => patchTaskDay.mutate({ taskId: latestTask.id, day, current: value })}
-                          className={`rounded-xl border px-2 py-2 text-xs font-semibold transition ${
-                            value === 0
-                              ? 'border-stroke bg-black/10 text-muted dark:bg-white/5'
-                              : value === 1
-                                ? 'border-emerald-400/45 bg-emerald-400/18 text-zinc-900 dark:text-white'
-                                : 'border-accent/45 bg-accent/25 text-zinc-900 dark:text-white'
-                          }`}
-                        >
-                          <div>{DAY_LABEL_RU[dayIdx]}</div>
-                          <div className="mt-1 text-sm">{value}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 rounded-xl border border-dashed border-stroke p-4 text-sm text-muted dark:border-white/10">
-                  Нет задач.{' '}
-                  {canEditTaskDays(user, employee.id) ? (
-                    <button
-                      type="button"
-                      onClick={() => createTaskForEmployee.mutate(employee.id)}
-                      className="font-semibold text-accent"
-                    >
-                      Создать первую
-                    </button>
+                <div className="min-w-0 overflow-x-auto">
+                  {taskQuery?.isLoading ? (
+                    <Skeleton className="h-[120px] w-full min-w-[20rem]" />
                   ) : (
-                    'У сотрудника еще не заведены задачи.'
+                    <div className={WEEK_MATRIX_GRID_CLASS}>
+                      <div className={DAY_MATRIX_CORNER_CLASS}>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted dark:text-white/45">
+                          Задачи
+                        </span>
+                      </div>
+                      {DAY_LABEL_RU.map((label) => (
+                        <div key={label} className={DAY_HEADER_CELL_CLASS}>
+                          {label}
+                        </div>
+                      ))}
+
+                      {taskList.length === 0 ? (
+                        <div className="col-span-8 rounded-lg border border-dashed border-stroke/80 py-6 text-center text-sm text-muted dark:border-white/15 dark:text-white/55">
+                          Нет задач.{' '}
+                          {canEditThis ? (
+                            <button
+                              type="button"
+                              onClick={() => createTaskForEmployee.mutate(employee.id)}
+                              className="font-semibold text-accent"
+                            >
+                              Создать первую
+                            </button>
+                          ) : (
+                            'У сотрудника ещё не заведены задачи.'
+                          )}
+                        </div>
+                      ) : (
+                        taskList.map((t) => (
+                          <React.Fragment key={t.id}>
+                            <div className="min-w-0 rounded-lg border border-stroke/60 bg-black/[0.02] px-3 py-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[15px] font-semibold leading-snug text-zinc-900 dark:text-white">{t.title}</div>
+                                  {t.description?.trim() ?
+                                    <div className="mt-1 text-[13px] leading-relaxed text-muted dark:text-white/50">{t.description}</div>
+                                  : null}
+                                  <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-muted dark:text-white/40">
+                                    Неделя:{` ${formatTaskDate(t.taskDate)}`}
+                                  </div>
+                                </div>
+                                {canMeta ?
+                                  <div className="flex shrink-0 gap-1">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 px-2"
+                                      title="Изменить задачу"
+                                      aria-label={`Изменить задачу ${t.title}`}
+                                      onClick={() => openEditTask(t)}
+                                    >
+                                      <Pencil className="size-3.5" aria-hidden />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-2 text-rose-600 dark:text-rose-200"
+                                      disabled={deleteTask.isPending}
+                                      title="Удалить задачу"
+                                      aria-label={`Удалить задачу ${t.title}`}
+                                      onClick={() => {
+                                        if (!confirm('Удалить эту задачу? Отметки по дням будут потеряны.')) return;
+                                        deleteTask.mutate(t.id);
+                                      }}
+                                    >
+                                      <Trash2 className="size-3.5" aria-hidden />
+                                    </Button>
+                                  </div>
+                                : null}
+                              </div>
+                            </div>
+                            {DAY_KEYS.map((day, dayIdx) => {
+                              const value = Number((t as unknown as Record<string, unknown>)[day] ?? 0);
+                              return (
+                                <div key={`${t.id}-${day}`} className="flex items-center justify-center">
+                                  <TaskDayScoreCell
+                                    weekdayShort={DAY_LABEL_RU[dayIdx]}
+                                    value={value}
+                                    compact
+                                    scoreOnly
+                                    matrix
+                                    disabled={!canEditThis || taskMutating}
+                                    onStep={() => patchTaskDay.mutate({ taskId: t.id, day, current: value })}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </React.Fragment>
+                        ))
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
 
-              <div className="mt-4 rounded-xl border border-stroke/80 bg-black/14 p-3 text-xs dark:border-white/10 dark:bg-black/35">
-                <div className="mb-2 text-[10px] uppercase tracking-[0.15em] text-muted dark:text-white/55">Аналитика сотрудника</div>
-                {overviewQuery?.isLoading ? (
-                  <Skeleton className="h-8" />
-                ) : overviewQuery?.data ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-stroke/60 bg-white/45 px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
-                      Серия: <span className="font-semibold">{overviewQuery.data.streakWeeks}</span>
+                <div className="rounded-xl border border-stroke/80 bg-black/14 p-3 text-xs dark:border-white/10 dark:bg-black/35">
+                  <div className="mb-2 text-[10px] uppercase tracking-[0.15em] text-muted dark:text-white/55">Аналитика</div>
+                  {overviewQuery?.isLoading ? (
+                    <Skeleton className="h-8" />
+                  ) : overviewQuery?.data ? (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <div className="rounded-lg border border-stroke/60 bg-white/45 px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
+                        Серия: <span className="font-semibold">{overviewQuery.data.streakWeeks}</span>
+                      </div>
+                      <div className="rounded-lg border border-stroke/60 bg-white/45 px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
+                        Месяц: <span className="font-semibold">{overviewQuery.data.monthlyEfficiency.toFixed(1)}%</span>
+                      </div>
+                      <div className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2 py-1.5">
+                        Рост: <span className="font-semibold">{overviewQuery.data.growthPercent.toFixed(1)}%</span>
+                      </div>
+                      <div className="rounded-lg border border-rose-400/35 bg-rose-500/10 px-2 py-1.5">
+                        Спад: <span className="font-semibold">{overviewQuery.data.declinePercent.toFixed(1)}%</span>
+                      </div>
                     </div>
-                    <div className="rounded-lg border border-stroke/60 bg-white/45 px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
-                      Месяц: <span className="font-semibold">{overviewQuery.data.monthlyEfficiency.toFixed(1)}%</span>
-                    </div>
-                    <div className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2 py-1.5">
-                      Рост: <span className="font-semibold">{overviewQuery.data.growthPercent.toFixed(1)}%</span>
-                    </div>
-                    <div className="rounded-lg border border-rose-400/35 bg-rose-500/10 px-2 py-1.5">
-                      Спад: <span className="font-semibold">{overviewQuery.data.declinePercent.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-muted dark:text-white/55">Аналитика пока недоступна</div>
-                )}
+                  ) : (
+                    <div className="text-muted dark:text-white/55">Аналитика пока недоступна</div>
+                  )}
+                </div>
               </div>
             </div>
-          );
-        })}
-      </div>
-      {featuredEmployees.length < 4 ? (
-        <div className="rounded-2xl border border-dashed border-stroke p-4 text-sm text-muted dark:border-white/10">
-          Для полной оперативной доски нужно минимум 4 активных сотрудника. Сейчас активных: {featuredEmployees.length}.
-        </div>
-      ) : null}
+        );
+      })}
     </div>
   );
 
@@ -456,7 +563,7 @@ export default function EmployeesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Сотрудники"
-        description="Оперативная доска на четырёх ключевых людях, карточки и таблица с KPI по выбранной неделе."
+        description="Доска: все отфильтрованные сотрудники списком вниз, у каждого полный горизонтальный блок. Карточки и таблица — те же данные."
         actions={
           <>
             {canWrite(user?.role) ?
@@ -539,7 +646,7 @@ export default function EmployeesPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <TabsList>
                     <TabsTrigger value="board" className="gap-2">
-                      4 блока
+                      Доска
                     </TabsTrigger>
                     <TabsTrigger value="cards" className="gap-2">
                       <LayoutGrid className="size-4" aria-hidden /> Карты
@@ -550,14 +657,14 @@ export default function EmployeesPage() {
                   </TabsList>
 
                   <div className="text-xs text-muted dark:text-white/55">
-                    Недельный KPI — без лишнего текста.{` Активно: ${items.length}`}
+                    Недельный KPI.{` В списке: ${items.length}`}
                     {user?.role === 'ADMIN' ?
                       ' Удаление — кнопка с корзиной у каждого сотрудника (здесь, в картах и в таблице).'
                     : null}
                   </div>
                 </div>
 
-                <TabsContent value="board">{featuredBoard}</TabsContent>
+                <TabsContent value="board">{employeesBoard}</TabsContent>
                 <TabsContent value="cards">{cards}</TabsContent>
                 <TabsContent value="table">{table}</TabsContent>
               </Tabs>
@@ -571,6 +678,40 @@ export default function EmployeesPage() {
           }
         </div>
       </Card>
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) setEditTaskId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle className="text-base font-semibold text-zinc-900 dark:text-white">Изменить задачу</DialogTitle>
+          <div className="mt-4 grid gap-3">
+            <label className="grid gap-1.5 text-[13px] font-medium text-zinc-900 dark:text-white/90">
+              Название
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+            </label>
+            <label className="grid gap-1.5 text-[13px] font-medium text-zinc-900 dark:text-white/90">
+              Описание
+              <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
+            </label>
+            <label className="grid gap-1.5 text-[13px] font-medium text-zinc-900 dark:text-white/90">
+              Дата (якорь недели)
+              <Input type="date" value={editTaskDate} onChange={(e) => setEditTaskDate(e.target.value)} />
+            </label>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Отмена
+              </Button>
+              <Button type="button" disabled={updateTaskMeta.isPending} onClick={submitEditTask}>
+                {updateTaskMeta.isPending ? 'Сохранение…' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={createOpen}

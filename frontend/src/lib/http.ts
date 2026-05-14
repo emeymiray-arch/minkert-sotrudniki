@@ -7,32 +7,63 @@ import {
 } from '@/lib/storage';
 import type { AuthUser } from '@/lib/types';
 
-/** База API: в `npm run dev` всегда `/api` (прокси Vite → :3000). Для прямого URL в dev задайте VITE_API_DIRECT=true. В проде — VITE_API_URL при сборке. */
+function isLocalPage(): boolean {
+  if (typeof window === 'undefined') return false;
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1';
+}
+
+/**
+ * База API: в `npm run dev` без `VITE_API_DIRECT` — `/api` (прокси Vite → :3000).
+ * На проде по умолчанию `/api` (на Vercel — прокси `api/[...path].ts` + `MINKERT_BACKEND_ORIGIN`).
+ * `VITE_API_URL` при сборке; на **хостинге** значения с localhost или `http://` на https-странице игнорируются.
+ */
 function resolveApiBase(): string {
   const useDirectInDev =
     import.meta.env.VITE_API_DIRECT === 'true' || import.meta.env.VITE_API_DIRECT === '1';
   const raw = import.meta.env.VITE_API_URL;
-  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  let trimmed = typeof raw === 'string' ? raw.trim() : '';
 
   if (import.meta.env.DEV && !useDirectInDev) {
     return '/api';
   }
 
-  const fallback = import.meta.env.DEV ? '/api' : 'http://localhost:3000/api';
+  if (typeof window !== 'undefined') {
+    const hosted = !isLocalPage();
+    if (hosted) {
+      const httpOnHttps = window.location.protocol === 'https:' && trimmed.startsWith('http://');
+      const pointsToDevMachine =
+        trimmed.includes('localhost') || trimmed.includes('127.0.0.1');
+      if (pointsToDevMachine || httpOnHttps) {
+        trimmed = '';
+      }
+    }
+  }
+
+  const fallback = '/api';
   return (trimmed || fallback).replace(/\/$/, '');
 }
 
 const API_BASE = resolveApiBase();
 
-/** Подсказка, если фронт на Vercel, а API_BASE всё ещё localhost (забыли VITE_API_URL при сборке). */
+const LOCAL_DEV_HINT =
+  ' Самый простой способ: в **корне репозитория** выполните `npm run dev` — запустятся API (порт 3000) и фронт с прокси `/api`. Убедитесь, что PostgreSQL доступен по `DATABASE_URL` в `backend/.env` (часто: из корня `docker compose up -d db`). Вручную: терминал 1 — `cd backend && npm run start:dev`, терминал 2 — `cd frontend && npm run dev`.';
+
+/** Подсказка для деплоя: прямой localhost из браузера на хостинге или забытый бэкенд на Vercel. */
 function connectionTroubleshootHint(): string {
   if (typeof window === 'undefined') return '';
-  const h = window.location.hostname;
-  if (h === 'localhost' || h === '127.0.0.1') return '';
+  if (isLocalPage()) return '';
   if (API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')) {
-    return ' На Vercel: Settings → Environment Variables → VITE_API_URL = https://ваш-backend.../api → Redeploy (без пересборки переменная не попадёт в клиент).';
+    return ' В Vercel → Settings → Environment Variables: удалите ошибочный VITE_API_URL с localhost. Задайте VITE_API_URL = https://ваш-api.onrender.com/api (обязательно https) или только MINKERT_BACKEND_ORIGIN = https://ваш-api.onrender.com (без /api) и сделайте Redeploy (лучше с галочкой Clear build cache).';
+  }
+  if (API_BASE === '/api' || API_BASE.endsWith('/api')) {
+    return ' В Vercel → Settings → Environment Variables: MINKERT_BACKEND_ORIGIN = https://ваш-сервис.onrender.com (без /api), сохраните → Deployments → Redeploy. Убедитесь, что в GitHub попал последний код с папкой frontend/api. Если задан VITE_API_URL с localhost или с http:// — удалите или замените на https://…/api.';
   }
   return '';
+}
+
+function connectionErrorSuffix(): string {
+  return (isLocalPage() ? LOCAL_DEV_HINT : '') + connectionTroubleshootHint();
 }
 
 /** Для отображения в настройках и отладки */
@@ -108,10 +139,7 @@ async function authorizedFetch(input: RequestInfo | URL, init: RequestInit, atte
   try {
     response = await fetch(input, { ...init, headers });
   } catch {
-    throw new Error(
-      'Не удаётся связаться с сервером. Запустите бэкенд: в папке backend выполните `npm run start:dev` (и поднимите PostgreSQL, например `docker compose up -d db`).' +
-        connectionTroubleshootHint(),
-    );
+    throw new Error('Не удаётся связаться с сервером.' + connectionErrorSuffix());
   }
   if (response.status === 401 && attempt === 0) {
     const refreshed = await tryRefreshOnce();
@@ -136,18 +164,13 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
           },
         });
   } catch {
-    throw new Error(
-      'Не удаётся связаться с сервером. Запустите бэкенд: в папке backend выполните `npm run start:dev` (и поднимите PostgreSQL, например `docker compose up -d db`).' +
-        connectionTroubleshootHint(),
-    );
+    throw new Error('Не удаётся связаться с сервером.' + connectionErrorSuffix());
   }
 
   if (!response.ok) {
     let message = `Ошибка ${response.status}`;
     if (response.status === 502 || response.status === 503 || response.status === 504) {
-      message =
-        'Бэкенд не отвечает (502/503 от прокси). Запустите API в отдельном терминале: cd backend && npm run start:dev. Убедитесь, что порт 3000 свободен и PostgreSQL запущен (brew services start postgresql@16). Либо из корня проекта: npm run dev' +
-        connectionTroubleshootHint();
+      message = 'Бэкенд не отвечает (502/503 от прокси).' + connectionErrorSuffix();
     } else {
       try {
         const body = (await response.json()) as { message?: string | string[] };
@@ -169,7 +192,10 @@ export async function apiJson<T>(path: string, init: RequestInit & { auth?: bool
     return JSON.parse(text) as T;
   } catch {
     throw new Error(
-      'Сервер вернул не JSON (часто это HTML-страница ошибки). Проверьте, что бэкенд запущен на порту 3000 и что в dev используется прокси `/api` или верный VITE_API_URL.',
+      'Сервер вернул не JSON (часто это HTML вместо API — например SPA без прокси `/api`).' +
+        (isLocalPage() ?
+          LOCAL_DEV_HINT + ' В dev: бэкенд на порту 3000, запросы на `/api` через Vite.'
+        : ' На Vercel: проверьте `MINKERT_BACKEND_ORIGIN` и Redeploy с Clear build cache; либо `VITE_API_URL` = https://…/api. Убедитесь, что в репозитории есть `frontend/api/[...path].ts` и задеплоен последний commit.'),
     );
   }
 }

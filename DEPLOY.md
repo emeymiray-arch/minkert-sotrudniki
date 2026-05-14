@@ -97,29 +97,43 @@ npx prisma db seed
 Логины после сида: `admin@minkert.local` / `Demo123!` (как локально).
 
 6. Скопируйте **публичный URL API** без пути, например `https://minkert-api-xxxx.onrender.com`.  
-   Для фронта понадобится **`https://minkert-api-xxxx.onrender.com/api`** (с суффиксом **`/api`**).
+   Он понадобится для Vercel (ниже).
 
 ---
 
 ## 3. Сайт на Vercel
 
-1. Зайдите на [https://vercel.com](https://vercel.com), импортируйте **тот же репозиторий**.
-2. При настройке проекта:
-   - **Root Directory:** `frontend`
-   - **Framework Preset:** Vite (или Other, если не определился)
+### Вариант «только кнопки» (рекомендуется)
+
+Не нужно знать командную строку: фронт сам шлёт запросы на `/api`, а на Vercel маленькая функция пересылает их на Render.
+
+1. Зайдите на [https://vercel.com](https://vercel.com) и войдите (часто через GitHub).
+2. **Add New… → Project** → выберите **тот же репозиторий**, что и для Render.
+3. В настройках импорта:
+   - **Root Directory:** нажите **Edit** и укажите папку **`frontend`**
+   - **Framework Preset:** Vite (или подставится сам)
    - **Build Command:** `npm run build`
    - **Output Directory:** `dist`
-3. В **Environment Variables** добавьте:
+4. Разверните блок **Environment Variables** (перед первым деплоем или потом в Settings):
+   - кнопка **Add** (или **Add Another**)
+   - **Key:** `MINKERT_BACKEND_ORIGIN`
+   - **Value:** адрес API **без** `/api` на конце, например `https://minkert-api-xxxx.onrender.com` (ровно тот хост, где открывается `/api/health`).
+   - окружения: отметьте **Production** (и **Preview**, если пользуетесь превью-деплоями).
+5. Нажмите **Deploy** и дождитесь зелёной галочки. Если проект уже был создан: **Settings → Environment Variables** → добавьте переменную → вкладка **Deployments** → у последнего деплоя **⋯ → Redeploy** (без этого новая переменная не подхватится).
+
+Потом в **Render** в переменной **`CORS_ORIGIN`** укажите URL сайта Vercel (например `https://minkert.vercel.app`), сохраните и при необходимости сделайте **Manual Deploy** API.
+
+**Не задавайте одновременно** `MINKERT_BACKEND_ORIGIN` и `VITE_API_URL` с разными хостами: если задан `VITE_API_URL`, браузер ходит на него напрямую, прокси не используется.
+
+### Вариант через VITE_API_URL (как раньше)
+
+Если хотите, чтобы браузер ходил на API **напрямую** (без прокси на Vercel), в **Environment Variables** задайте при сборке:
 
 | Name | Value |
 |------|--------|
 | `VITE_API_URL` | `https://ВАШ-API.onrender.com/api` |
 
-4. **Deploy**. Скопируйте URL сайта, например `https://minkert.vercel.app`.
-
-5. Вернитесь в **Render** → переменная **`CORS_ORIGIN`** = ваш URL Vercel (можно с запятой: `https://minkert.vercel.app,https://www.ваш-домен.ru` если подключите свой домен). Сохраните и сделайте **Manual Deploy** у сервиса API.
-
-6. Снова откройте сайт на Vercel — вход и данные идут уже в **облачную** базу.
+Тогда **`MINKERT_BACKEND_ORIGIN`** не нужен. На Render в **`CORS_ORIGIN`** всё равно должен быть URL вашего сайта на Vercel.
 
 ---
 
@@ -135,7 +149,7 @@ npx prisma db seed
 
 - В **Vercel**: Project → Settings → Domains — добавьте домен для фронта.
 - В **Render**: Settings → Custom Domain — для API (или оставьте поддомен `onrender.com`).
-- Обновите **`VITE_API_URL`** в Vercel (пересборка) и **`CORS_ORIGIN`** на Render под новые адреса.
+- Обновите **`MINKERT_BACKEND_ORIGIN`** (если используете прокси) или **`VITE_API_URL`** (прямой URL) в Vercel и сделайте **Redeploy**, а на Render — **`CORS_ORIGIN`** под новые адреса.
 
 ---
 
@@ -150,4 +164,4 @@ npx prisma db seed
 - **Render Free** API засыпает без запросов — первый клик после паузы может долго грузиться.
 - **Neon** даёт лимиты по объёму — для демо и небольшой команды обычно достаточно.
 
-Если нужен один провайдер «всё в одном», можно использовать **Railway** (БД + Node) по аналогии: те же переменные `DATABASE_URL`, `JWT_ACCESS_SECRET`, `CORS_ORIGIN`, сборка из папки `backend`, фронт отдельно на Vercel с `VITE_API_URL`.
+Если нужен один провайдер «всё в одном», можно использовать **Railway** (БД + Node) по аналогии: те же переменные `DATABASE_URL`, `JWT_ACCESS_SECRET`, `CORS_ORIGIN`, сборка из папки `backend`, фронт отдельно на Vercel с **`MINKERT_BACKEND_ORIGIN`** или **`VITE_API_URL`**.

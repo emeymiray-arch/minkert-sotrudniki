@@ -18,6 +18,8 @@ export type Employee = {
   status: EmployeeStatus;
   createdAt: string;
   updatedAt: string;
+  /** Секрет для ссылки /d/:token (только у кого выпущена ссылка). */
+  diaryToken?: string | null;
   _count?: { tasks: number };
 };
 
@@ -40,6 +42,26 @@ export type Task = {
   fri: number;
   sat: number;
   sun: number;
+};
+
+export type DiaryLineState = 'EMPTY' | 'CHECK' | 'CROSS';
+
+export type DiaryLineDto = {
+  id: string;
+  sortOrder: number;
+  label: string;
+  state: DiaryLineState;
+};
+
+export type DiaryDayBlock = {
+  date: string;
+  lines: DiaryLineDto[];
+};
+
+export type EmployeeDiaryRange = {
+  from: string;
+  to: string;
+  days: DiaryDayBlock[];
 };
 
 export type TeamDashboard = {
