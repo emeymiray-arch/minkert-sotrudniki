@@ -11,7 +11,15 @@
    - **`JWT_ACCESS_SECRET`** — любая длинная случайная строка (можно сгенерировать: `openssl rand -hex 32` на своём компьютере);
    - **`CORS_ORIGIN`** — пока заглушка, **после шага 7 замените** на URL сайта с Vercel (например `https://ваш-проект.vercel.app`).
 4. Дождитесь зелёного деплоя. Нажмите **Open app** или откройте **`https://…onrender.com/api/health`** — должен быть JSON с `"ok": true` (первый раз после «сна» free‑плана подождите до ~1 мин).
-5. В Render → ваш сервис → **Shell** выполните один раз: `npx prisma db seed` — появятся демо-пользователи (логин **`admin@minkert.local`**, пароль **`Demo123!`**).
+5. **Один раз засеять демо-пользователей** (логин **`admin@minkert.local`**, пароль **`Demo123!`**). Если **Shell на Render недоступен** (платно или нет кнопки) — сделайте с **своего компьютера** (Mac/Windows), в той же папке, где клонирован репозиторий:
+   ```bash
+   cd backend
+   npm ci
+   npx prisma generate
+   DATABASE_URL='ВСТАВЬТЕ_СТРОКУ_ИЗ_NEON' npm run db:seed
+   ```
+   Строку `DATABASE_URL` возьмите **точно такую же**, как в Render (из Neon), в **одинарных кавычках** `'...'`.  
+   Если Shell на Render **есть** — можно вместо этого там выполнить: `npx prisma db seed`.
 6. Скопируйте **URL сервиса** вида `https://minkert-api-xxxx.onrender.com` (**без** `/api` в конце).
 7. **Vercel** — [vercel.com](https://vercel.com) → импорт **того же репозитория** → **Root Directory оставьте пустым** (корень репо, чтобы подхватились корневой `vercel.json` и `middleware.ts`) → **Deploy**.
 8. В Vercel → **Settings** → **Environment Variables** → **`MINKERT_BACKEND_ORIGIN`** = URL из шага 6 (**без** `/api`) → **Save** → **Deployments** → **Redeploy**.
@@ -67,7 +75,7 @@
 
 - Удобно **Neon** или **Supabase**: управляемый Postgres, бэкапы, `sslmode=require` в `DATABASE_URL`.
 - Строка подключения — **только** в секретах хостинга (Render/Railway), не в репозитории.
-- После первого деплоя API один раз в Shell: `npx prisma db seed` (демо-пользователи), либо только миграции (`migrate deploy` уже в `startCommand` на Render).
+- После первого деплоя API один раз выполните **`prisma db seed`** (демо-пользователи): либо в Render **Shell** (`npx prisma db seed`), либо **у себя на компьютере** с той же `DATABASE_URL`, что в Neon/Render (см. «Быстрый старт», шаг 5). Миграции (`migrate deploy`) уже в `startCommand` на Render.
 
 ---
 
@@ -105,11 +113,17 @@
 
 4. Дождитесь успешного деплоя. Откройте URL вида **`https://minkert-api-xxxx.onrender.com/api/health`** — должен быть JSON `{"ok":true,...}`.
 
-5. **Один раз** засейте демо-пользователей (в панели Render → ваш сервис → **Shell**):
+5. **Один раз** засейте демо-пользователей — **любой** из способов:
 
-```bash
-npx prisma db seed
-```
+   **А) С компьютера** (если Shell на Render недоступен): в папке репозитория выполните (подставьте строку из Neon вместо `…`):
+   ```bash
+   cd backend
+   npm ci
+   npx prisma generate
+   DATABASE_URL='postgresql://…' npm run db:seed
+   ```
+
+   **Б) В Render → Shell** (если есть): `npx prisma db seed`
 
 Логины после сида: `admin@minkert.local` / `Demo123!` (как локально).
 
@@ -162,7 +176,7 @@ Render здесь нужен **только как хост для API** (лог
 
 - Сайт: `https://….vercel.app`
 - Здоровье API: `https://….onrender.com/api/health`
-- Вход: `admin@minkert.local` / `Demo123!` (после `prisma db seed` на Render)
+- Вход: `admin@minkert.local` / `Demo123!` (после `prisma db seed` с компьютера или из Shell Render)
 
 ---
 
