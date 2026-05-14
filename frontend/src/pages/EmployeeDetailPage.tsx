@@ -130,9 +130,9 @@ export default function EmployeeDetailPage() {
   });
 
   const createTask = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts?: { keepOpen?: boolean }) => {
       if (!id) throw new Error('Пустой ID');
-      return apiJson(`/employees/${id}/tasks`, {
+      await apiJson<Task>(`/employees/${id}/tasks`, {
         method: 'POST',
         body: JSON.stringify({
           title,
@@ -141,10 +141,15 @@ export default function EmployeeDetailPage() {
           days: {},
         }),
       });
+      return { keepOpen: Boolean(opts?.keepOpen) };
     },
-    onSuccess: async () => {
-      toast.success('Задача добавлена');
-      setDialogOpen(false);
+    onSuccess: async (result) => {
+      if (result.keepOpen) {
+        toast.success('Задача добавлена — можно ввести следующую');
+      } else {
+        toast.success('Задача добавлена');
+        setDialogOpen(false);
+      }
       setTitle('Фокус команды на неделе');
       setDescription('');
       await qc.invalidateQueries({ queryKey: ['employee-tasks', id] });
@@ -242,6 +247,14 @@ export default function EmployeeDetailPage() {
     });
   };
 
+  const submitNewTask = (keepOpen: boolean) => {
+    if (title.trim().length < 1) {
+      toast.error('Укажите название задачи');
+      return;
+    }
+    createTask.mutate({ keepOpen });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -281,7 +294,7 @@ export default function EmployeeDetailPage() {
         <Card className="min-w-0 overflow-hidden">
           <CardHeader
             title="Неделя и баллы"
-            description="Сверху — сотрудник; ниже отдельная таблица: слева задачи, сверху ряд ПН–ВС. Ячейки дней одинакового размера. Клик: 0 → 1 → 2."
+            description="Сверху — сотрудник; ниже таблица: слева задачи, сверху ПН–ВС. Клик по ячейке: 0 → 1 → 2. Задач у сотрудника может быть сколько угодно: каждый раз «Новая задача» добавляет ещё одну строку в матрицу."
           />
 
           {!tasks.data ?
@@ -406,6 +419,13 @@ export default function EmployeeDetailPage() {
                     </React.Fragment>
                   ))}
                 </div>
+                {canEdit ?
+                  <div className="flex flex-wrap justify-center gap-2 border-t border-stroke/60 px-4 pb-6 pt-4 dark:border-white/10">
+                    <Button type="button" variant="outline" onClick={() => setDialogOpen(true)}>
+                      Добавить ещё задачу
+                    </Button>
+                  </div>
+                : null}
               </div>
             </>
           )}
@@ -507,9 +527,14 @@ export default function EmployeeDetailPage() {
               Дата (якорь недели)
               <Input className="mt-2" type="date" value={taskAnchor} onChange={(e) => setTaskAnchor(e.target.value)} />
             </label>
-            <Button type="button" disabled={createTask.isPending} onClick={() => createTask.mutate()}>
-              Создать
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+              <Button type="button" variant="outline" disabled={createTask.isPending} onClick={() => submitNewTask(true)}>
+                {createTask.isPending ? 'Сохранение…' : 'Создать и добавить ещё'}
+              </Button>
+              <Button type="button" disabled={createTask.isPending} onClick={() => submitNewTask(false)}>
+                {createTask.isPending ? 'Сохранение…' : 'Создать'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -583,7 +608,7 @@ function EmptyTasks({ employeeName, canEdit, open }: { employeeName?: string; ca
     <div className="rounded-[26px] border border-dashed border-stroke px-6 py-10 text-center dark:border-white/14">
       <div className="text-lg font-semibold text-zinc-900 dark:text-white">Нет задач</div>
       <div className="mx-auto mt-2 max-w-md text-sm text-muted dark:text-white/56">
-        {employeeName ?? 'Специалист'} еще не добавлен в задачный цикл. Создайте первую задачу, чтобы активировать недельную матрицу.
+        {employeeName ?? 'Специалист'} еще не добавлен в задачный цикл. Создайте первую задачу, чтобы активировать недельную матрицу. Потом можно добавлять любое количество задач той же кнопкой.
       </div>
       {canEdit ?
         <Button className="mt-6" type="button" onClick={open}>
