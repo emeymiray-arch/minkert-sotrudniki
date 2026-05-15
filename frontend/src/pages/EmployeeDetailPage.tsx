@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Trash2, Check, X } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,7 +18,7 @@ import { ruEmployeeStatus } from '@/lib/format';
 import { apiJson } from '@/lib/http';
 import { canEditTaskDays, canManageTasks } from '@/lib/taskPermissions';
 import { DAY_HEADER_CELL_CLASS, DAY_KEYS, DAY_LABEL_RU, DAY_MATRIX_CORNER_CLASS, nextStatus, WEEK_MATRIX_GRID_CLASS, type DayKey } from '@/lib/task-days';
-import type { Employee, EmployeeDiaryRange, Task } from '@/lib/types';
+import type { Employee, Task } from '@/lib/types';
 
 type EmployeeOverview = {
   streakWeeks: number;
@@ -158,25 +158,6 @@ export default function EmployeeDetailPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не создано'),
   });
 
-  const diaryRange = React.useMemo(() => {
-    const to = new Date();
-    const from = new Date(to);
-    from.setUTCDate(from.getUTCDate() - 20);
-    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-  }, []);
-
-  const canViewDiary =
-    Boolean(user) &&
-    Boolean(id) &&
-    (user!.role === 'ADMIN' || user!.role === 'MANAGER' || user!.linkedEmployeeId === id);
-
-  const employeeDiary = useQuery({
-    enabled: Boolean(id) && canViewDiary && Boolean(employee.data),
-    queryKey: ['employee-diary', id, diaryRange.from, diaryRange.to],
-    queryFn: () =>
-      apiJson<EmployeeDiaryRange>(`/employees/${id}/diary?from=${diaryRange.from}&to=${diaryRange.to}`),
-  });
-
   const diaryTokenMutation = useMutation({
     mutationFn: () => {
       if (!id) throw new Error('Пустой ID');
@@ -185,20 +166,9 @@ export default function EmployeeDetailPage() {
     onSuccess: async () => {
       toast.success('Ссылка на дневник готова');
       await qc.invalidateQueries({ queryKey: ['employee', id] });
-      await qc.invalidateQueries({ queryKey: ['employee-diary', id] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось выдать ссылку'),
   });
-
-  const diaryDaysShown = React.useMemo(() => {
-    if (!employeeDiary.data?.days) return [];
-    return employeeDiary.data.days
-      .map((d) => ({
-        ...d,
-        lines: d.lines.filter((l) => l.label.trim() || l.state !== 'EMPTY'),
-      }))
-      .filter((d) => d.lines.length > 0);
-  }, [employeeDiary.data]);
 
   const onStepDay = (taskId: string, day: DayKey, currentRaw: unknown) => {
     if (!id || !canEditTaskDays(user, id)) return;
@@ -215,9 +185,9 @@ export default function EmployeeDetailPage() {
   const canEdit = canEditTaskDays(user, id);
   const canMeta = canManageTasks(user);
 
-  const copyPublicUrl = async (path: 'd' | 't', token: string) => {
+  const copyDiaryLink = async (token: string) => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/${path}/${token}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/d/${token}`);
       toast.success('Ссылка скопирована');
     } catch {
       toast.error('Не удалось скопировать');
@@ -448,8 +418,8 @@ export default function EmployeeDetailPage() {
 
         <Card className="min-w-0 overflow-hidden">
           <CardHeader
-            title="Ссылки для сотрудника"
-            description="Дневник — свободные строки за день. Задачи — то, что вы задали в таблице недели; сотрудник отмечает выбранный день без входа. Один токен для обеих ссылок."
+            title="Ссылка для сотрудника"
+            description="Отправьте ссылку на дневник: сотрудник увидит ваши задачи из таблицы «Неделя и баллы» и отметит выполнение за выбранный день. Отметки сразу видны вам в таблице выше."
           />
           <div className="space-y-4 px-4 pb-6">
             {canMeta ?
@@ -458,69 +428,30 @@ export default function EmployeeDetailPage() {
                   Ссылка для сотрудника
                 </div>
                 {employee.data?.diaryToken ?
-                  <div className="mt-2 space-y-4">
-                    <div className="space-y-1.5">
-                      <div className="text-[11px] font-medium text-zinc-700 dark:text-white/65">Задачи недели (как в программе)</div>
-                      <Input
-                        readOnly
-                        className="font-mono text-[12px] sm:text-[13px]"
-                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/t/${employee.data.diaryToken}`}
-                      />
-                      <Button type="button" variant="outline" size="sm" onClick={() => void copyPublicUrl('t', employee.data!.diaryToken!)}>
-                        Копировать ссылку на задачи
+                  <div className="mt-2 space-y-2">
+                    <Input
+                      readOnly
+                      className="font-mono text-[12px] sm:text-[13px]"
+                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${employee.data.diaryToken}`}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => void copyDiaryLink(employee.data!.diaryToken!)}>
+                        Копировать ссылку
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" disabled={diaryTokenMutation.isPending} onClick={() => diaryTokenMutation.mutate()}>
+                        Новая ссылка
                       </Button>
                     </div>
-                    <div className="space-y-1.5 border-t border-stroke/60 pt-3 dark:border-white/10">
-                      <div className="text-[11px] font-medium text-zinc-700 dark:text-white/65">Дневник (свободные строки)</div>
-                      <Input
-                        readOnly
-                        className="font-mono text-[12px] sm:text-[13px]"
-                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/d/${employee.data.diaryToken}`}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => void copyPublicUrl('d', employee.data!.diaryToken!)}>
-                          Копировать ссылку на дневник
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" disabled={diaryTokenMutation.isPending} onClick={() => diaryTokenMutation.mutate()}>
-                          Новая ссылка
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-muted dark:text-white/45">«Новая ссылка» отключает предыдущие ссылки и дневника, и задач.</p>
+                    <p className="text-[11px] text-muted dark:text-white/45">«Новая ссылка» отключает предыдущую.</p>
                   </div>
                 : (
                   <Button type="button" className="mt-2" size="sm" disabled={diaryTokenMutation.isPending} onClick={() => diaryTokenMutation.mutate()}>
-                    Создать ссылку на дневник
+                    Создать ссылку для сотрудника
                   </Button>
                 )}
               </div>
             : null}
 
-            {canViewDiary ?
-              employeeDiary.isLoading ?
-                <Skeleton className="h-24 w-full" />
-              : diaryDaysShown.length > 0 ?
-                <div className="space-y-3">
-                  {diaryDaysShown.map((d) => (
-                    <div key={d.date} className="rounded-xl border border-stroke/60 p-3 dark:border-white/10">
-                      <div className="text-sm font-semibold text-zinc-900 dark:text-white">{d.date}</div>
-                      <ul className="mt-2 space-y-1">
-                        {d.lines.map((l) => (
-                          <li key={l.id} className="flex items-start gap-2 text-[13px]">
-                            {l.state === 'CHECK' ?
-                              <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden />
-                            : l.state === 'CROSS' ?
-                              <X className="mt-0.5 size-4 shrink-0 text-rose-500" aria-hidden />
-                            : <span className="mt-0.5 size-4 shrink-0 text-muted">○</span>}
-                            <span className="text-zinc-800 dark:text-white/85">{l.label || '—'}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              : <p className="text-[13px] text-muted dark:text-white/50">За выбранный период записей дневника нет.</p>
-            : null}
           </div>
         </Card>
       </div>
