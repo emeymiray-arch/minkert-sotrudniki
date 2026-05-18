@@ -18,6 +18,27 @@ function utcMonday(d = new Date()): Date {
 }
 
 async function main(): Promise<void> {
+  const force = process.env.SEED_FORCE === '1' || process.env.SEED_FORCE === 'true';
+  const employeeCount = await prisma.employee.count();
+  const userCount = await prisma.user.count();
+
+  if (process.env.NODE_ENV === 'production' && !force) {
+    console.log('[seed] Production: seed не запускается (ваши данные не трогаются).');
+    console.log('  Если осознанно нужен демо-сброс: SEED_FORCE=1 npm run db:seed');
+    return;
+  }
+
+  if ((employeeCount > 0 || userCount > 0) && !force) {
+    console.log('[seed] В базе уже есть данные — seed пропущен, ничего не удалено.');
+    console.log(`  Сотрудников: ${employeeCount}, пользователей: ${userCount}`);
+    console.log('  Демо-пересоздание только вручную: SEED_FORCE=1 npm run db:seed');
+    return;
+  }
+
+  if (force) {
+    console.warn('[seed] SEED_FORCE=1 — удаление демо-данных и пересоздание…');
+  }
+
   await prisma.task.deleteMany();
   await prisma.employee.deleteMany();
   await prisma.refreshToken.deleteMany();
