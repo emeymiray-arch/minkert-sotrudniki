@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/auth';
 import { utcMondayIso } from '@/lib/date';
+import { nextWeekMondayIso } from '@/lib/task-week';
 import { ruEmployeeStatus } from '@/lib/format';
 import { apiJson } from '@/lib/http';
 import { canEditTaskDays, canManageTasks } from '@/lib/taskPermissions';
@@ -46,7 +47,12 @@ export default function EmployeeDetailPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [title, setTitle] = React.useState('Фокус команды на неделе');
   const [description, setDescription] = React.useState('');
+  const [viewWeek, setViewWeek] = React.useState(utcMondayIso());
   const [taskAnchor, setTaskAnchor] = React.useState(utcMondayIso());
+
+  React.useEffect(() => {
+    setTaskAnchor(viewWeek);
+  }, [viewWeek]);
 
   const [editOpen, setEditOpen] = React.useState(false);
   const [editTaskId, setEditTaskId] = React.useState<string | null>(null);
@@ -62,8 +68,29 @@ export default function EmployeeDetailPage() {
 
   const tasks = useQuery({
     enabled: Boolean(id),
-    queryKey: ['employee-tasks', id],
-    queryFn: () => apiJson<Task[]>(`/employees/${id}/tasks`),
+    queryKey: ['employee-tasks', id, viewWeek],
+    queryFn: () => apiJson<Task[]>(`/employees/${id}/tasks?week=${encodeURIComponent(viewWeek)}`),
+  });
+
+  const rolloverWeek = useMutation({
+    mutationFn: () =>
+      apiJson<{ created: number; skipped: number; toWeek: string }>(`/employees/${id}/tasks/rollover-week`, {
+        method: 'POST',
+        body: JSON.stringify({ weekAnchor: viewWeek }),
+      }),
+    onSuccess: async (r) => {
+      if (r.created > 0) {
+        toast.success(`Скопировано на неделю ${r.toWeek}: ${r.created} задач`);
+        setViewWeek(r.toWeek);
+      } else {
+        toast.message('Нечего копировать', {
+          description: r.skipped ? 'На следующей неделе уже есть такие названия' : 'На этой неделе нет задач',
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ['employee-tasks', id] });
+      await qc.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось'),
   });
 
   const overview = useQuery({
@@ -264,8 +291,32 @@ export default function EmployeeDetailPage() {
         <Card className="min-w-0 overflow-hidden">
           <CardHeader
             title="Неделя и баллы"
-            description="Сверху — сотрудник; ниже таблица: слева задачи, сверху ПН–ВС. Клик по ячейке: 0 → 1 → 2. Задач у сотрудника может быть сколько угодно: каждый раз «Новая задача» добавляет ещё одну строку в матрицу."
+            description="Показаны задачи только выбранной недели. «На след. неделю» копирует все задачи разом (старая неделя сохраняется). Клик по ячейке: 0 → 1 → 2."
           />
+          {canMeta ?
+            <div className="mx-4 mb-2 flex flex-wrap items-end gap-2 border-b border-stroke/60 pb-4 dark:border-white/10">
+              <label className="grid gap-1 text-[12px] font-medium text-zinc-800 dark:text-white/85">
+                Неделя
+                <Input type="date" className="max-w-[11rem]" value={viewWeek} onChange={(e) => setViewWeek(e.target.value)} />
+              </label>
+              <Button type="button" variant="outline" size="sm" onClick={() => setViewWeek(utcMondayIso())}>
+                Текущая
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={rolloverWeek.isPending}
+                onClick={() => {
+                  const next = nextWeekMondayIso(viewWeek);
+                  if (!confirm(`Скопировать все задачи недели ${viewWeek} на ${next}?`)) return;
+                  rolloverWeek.mutate();
+                }}
+              >
+                {rolloverWeek.isPending ? 'Копирование…' : 'На след. неделю →'}
+              </Button>
+            </div>
+          : null}
 
           {!tasks.data ?
             <div className="space-y-2 p-4 pt-0">
@@ -503,8 +554,11 @@ export default function EmployeeDetailPage() {
               <Textarea className="mt-2" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
             </label>
             <label className="text-sm font-semibold text-zinc-900 dark:text-white">
-              Дата (якорь недели)
+              Неделя задачи
               <Input className="mt-2" type="date" value={editTaskDate} onChange={(e) => setEditTaskDate(e.target.value)} />
+              <span className="mt-1 block text-[12px] font-normal text-muted dark:text-white/50">
+                Смена недели переносит задачу; для копии на следующую неделю используйте «На след. неделю →».
+              </span>
             </label>
             <div className="flex flex-wrap justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>

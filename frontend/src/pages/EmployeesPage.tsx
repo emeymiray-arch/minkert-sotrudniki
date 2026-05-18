@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { utcMondayIso } from '@/lib/date';
+import { nextWeekMondayIso } from '@/lib/task-week';
 import { apiJson } from '@/lib/http';
 import { ruEmployeeStatus } from '@/lib/format';
 import { DAY_HEADER_CELL_CLASS, DAY_KEYS, DAY_LABEL_RU, DAY_MATRIX_CORNER_CLASS, nextStatus, WEEK_MATRIX_GRID_CLASS, type DayKey } from '@/lib/task-days';
@@ -92,10 +93,42 @@ export default function EmployeesPage() {
 
   const boardTasks = useQueries({
     queries: items.map((employee) => ({
-      queryKey: ['employee-tasks', employee.id],
-      queryFn: () => apiJson<Task[]>(`/employees/${employee.id}/tasks`),
+      queryKey: ['employee-tasks', employee.id, weekAnchor],
+      queryFn: () =>
+        apiJson<Task[]>(`/employees/${employee.id}/tasks?week=${encodeURIComponent(weekAnchor)}`),
       enabled: items.length > 0,
     })),
+  });
+
+  const rolloverWeekAll = useMutation({
+    mutationFn: async () => {
+      if (!items.length) return { created: 0, skipped: 0 };
+      let created = 0;
+      let skipped = 0;
+      for (const e of items) {
+        const r = await apiJson<{ created: number; skipped: number }>(`/employees/${e.id}/tasks/rollover-week`, {
+          method: 'POST',
+          body: JSON.stringify({ weekAnchor }),
+        });
+        created += r.created;
+        skipped += r.skipped;
+      }
+      return { created, skipped };
+    },
+    onSuccess: async (r) => {
+      const next = nextWeekMondayIso(weekAnchor);
+      if (r.created > 0) {
+        toast.success(`На неделю ${next} скопировано задач: ${r.created}${r.skipped ? ` (пропущено дублей: ${r.skipped})` : ''}`);
+        setWeekAnchor(next);
+      } else {
+        toast.message('Нечего копировать', {
+          description: r.skipped ? 'На следующей неделе уже есть такие названия' : 'На выбранной неделе нет задач',
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось перенести'),
   });
 
   const boardOverviews = useQueries({
@@ -617,7 +650,24 @@ export default function EmployeesPage() {
 
           <div className="space-y-2 lg:col-span-2">
             <div className="text-xs uppercase tracking-[0.14em] text-muted dark:text-white/55">Неделя (анкера)</div>
-            <Input type="date" value={weekAnchor} onChange={(e) => setWeekAnchor(e.target.value)} />
+            <div className="flex flex-wrap items-center gap-2">
+              <Input type="date" className="max-w-[11rem]" value={weekAnchor} onChange={(e) => setWeekAnchor(e.target.value)} />
+              {canWrite(user?.role) ?
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={rolloverWeekAll.isPending || !items.length}
+                  onClick={() => {
+                    const next = nextWeekMondayIso(weekAnchor);
+                    if (!confirm(`Скопировать задачи недели ${weekAnchor} на ${next} для всех ${items.length} сотрудников в списке?`)) return;
+                    rolloverWeekAll.mutate();
+                  }}
+                >
+                  {rolloverWeekAll.isPending ? 'Копирование…' : 'На след. неделю →'}
+                </Button>
+              : null}
+            </div>
           </div>
         </div>
 

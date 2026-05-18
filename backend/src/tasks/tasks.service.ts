@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { utcDateToWeekDayDb, WEEK_DAY_LABEL_RU, WEEK_DAYS_DB, type WeekDayDb } from '../common/constants/days';
-import { startUtcWeekMonday } from '../common/date/week';
+import { addUtcDays, startUtcWeekMonday } from '../common/date/week';
 import { clampStatus } from '../common/kpi/kpi.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateTaskDto } from './dto/create-task.dto';
@@ -35,12 +35,71 @@ export class TasksService {
     );
   }
 
-  async list(employeeId: string) {
+  async list(employeeId: string, weekRaw?: string) {
     await this.ensureEmployee(employeeId);
+    const where: { employeeId: string; taskDate?: Date } = { employeeId };
+    if (weekRaw?.trim()) {
+      where.taskDate = startUtcWeekMonday(weekRaw.trim());
+    }
     return this.prisma.task.findMany({
-      where: { employeeId },
+      where,
       orderBy: [{ taskDate: 'desc' }, { createdAt: 'desc' }],
     });
+  }
+
+  /** Копирует все задачи недели на следующую (новые строки, баллы 0). Старая неделя не трогается. */
+  async rolloverWeek(employeeId: string, weekRaw: string, user?: JwtUserPayload) {
+    this.ensureWriteRole(user);
+    await this.ensureEmployee(employeeId);
+    const fromMonday = startUtcWeekMonday(weekRaw);
+    const toMonday = addUtcDays(fromMonday, 7);
+
+    const source = await this.prisma.task.findMany({
+      where: { employeeId, taskDate: fromMonday },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!source.length) {
+      return { created: 0, skipped: 0, fromWeek: this.isoDate(fromMonday), toWeek: this.isoDate(toMonday) };
+    }
+
+    const target = await this.prisma.task.findMany({
+      where: { employeeId, taskDate: toMonday },
+    });
+    const titles = new Set(target.map((t) => t.title.trim().toLowerCase()));
+
+    let created = 0;
+    let skipped = 0;
+    for (const t of source) {
+      const key = t.title.trim().toLowerCase();
+      if (titles.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      await this.prisma.task.create({
+        data: {
+          employeeId,
+          title: t.title,
+          description: t.description,
+          taskDate: toMonday,
+          mon: 0,
+          tue: 0,
+          wed: 0,
+          thu: 0,
+          fri: 0,
+          sat: 0,
+          sun: 0,
+        },
+      });
+      titles.add(key);
+      created += 1;
+    }
+
+    return {
+      created,
+      skipped,
+      fromWeek: this.isoDate(fromMonday),
+      toWeek: this.isoDate(toMonday),
+    };
   }
 
   async create(employeeId: string, dto: CreateTaskDto, user?: JwtUserPayload) {
