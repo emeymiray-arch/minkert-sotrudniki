@@ -1,4 +1,5 @@
 import { utcMondayIso } from '@/lib/date';
+import type { DayKey } from '@/lib/task-days';
 
 /** Понедельник недели задачи (UTC, как на бэкенде). */
 export function weekMondayKey(raw: unknown): string {
@@ -24,4 +25,28 @@ export function nextWeekMondayIso(weekAnchor: string): string {
   const d = new Date(`${weekMondayKey(weekAnchor)}T12:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + 7);
   return d.toISOString().slice(0, 10);
+}
+
+/** День недели для даты YYYY-MM-DD (как на бэкенде). */
+export function dayKeyFromIso(dateIso: string): DayKey {
+  const d = new Date(`${dateIso.slice(0, 10)}T12:00:00.000Z`);
+  const map: DayKey[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  return map[d.getUTCDay()]!;
+}
+
+/** Балл задачи за день; -1 если задача из другой недели. */
+export function taskScoreOnDate(
+  task: { taskDate: unknown } & Partial<Record<DayKey, number>>,
+  dateIso: string,
+): number {
+  if (weekMondayKey(task.taskDate) !== weekMondayKey(dateIso)) return -1;
+  const key = dayKeyFromIso(dateIso);
+  return Number(task[key] ?? 0);
+}
+
+export function scoreLabelRu(score: number): string {
+  if (score < 0) return '—';
+  if (score === 0) return 'Не сделано';
+  if (score === 1) return 'Частично';
+  return 'Сделано';
 }

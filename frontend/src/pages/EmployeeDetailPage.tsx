@@ -7,7 +7,10 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
+import { EmployeeDiaryMarks } from '@/components/tasks/EmployeeDiaryMarks';
 import { TaskDayScoreCell } from '@/components/tasks/TaskDayScoreCell';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { weekMondayKey } from '@/lib/task-week';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +51,7 @@ export default function EmployeeDetailPage() {
   const [title, setTitle] = React.useState('Фокус команды на неделе');
   const [description, setDescription] = React.useState('');
   const [viewWeek, setViewWeek] = React.useState(utcMondayIso());
+  const [diaryDate, setDiaryDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [taskAnchor, setTaskAnchor] = React.useState(utcMondayIso());
 
   React.useEffect(() => {
@@ -287,7 +291,13 @@ export default function EmployeeDetailPage() {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <Tabs defaultValue="week" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="week">Неделя и баллы</TabsTrigger>
+          <TabsTrigger value="diary">Дневник</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="week">
         <Card className="min-w-0 overflow-hidden">
           <CardHeader
             title="Неделя и баллы"
@@ -451,32 +461,19 @@ export default function EmployeeDetailPage() {
             </>
           )}
         </Card>
+        </TabsContent>
 
-        <Card className="min-w-0">
-          <CardHeader title="Аналитика" description="Показатели по сотруднику — под таблицей недели." />
-          {overview.isLoading ?
-            <Skeleton className="mx-4 mb-6 h-[200px]" />
-          : overview.data ?
-            <div className="grid gap-3 px-4 pb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-              <Metric label="Серия недель" value={`${overview.data.streakWeeks}`} />
-              <Metric label="Рост" value={`${Number(overview.data.growthPercent).toFixed(2)}%`} />
-              <Metric label="Спад" value={`${Number(overview.data.declinePercent).toFixed(2)}%`} />
-              <Metric accent label="Месяц" value={`${Number(overview.data.monthlyEfficiency).toFixed(2)}%`} />
-              <Metric accent label="Период" value={`${Number(overview.data.periodEfficiency).toFixed(2)}%`} />
-            </div>
-          : null}
-        </Card>
-
+        <TabsContent value="diary">
         <Card className="min-w-0 overflow-hidden">
           <CardHeader
-            title="Ссылка для сотрудника"
-            description="Отправьте ссылку на дневник: сотрудник увидит ваши задачи из таблицы «Неделя и баллы» и отметит выполнение за выбранный день. Отметки сразу видны вам в таблице выше."
+            title="Дневник"
+            description="Ссылка для чек-листа сотрудника и отметки по дням — то же, что он отправляет кнопкой «Отправить руководителю»."
           />
           <div className="space-y-4 px-4 pb-6">
             {canMeta ?
               <div className="rounded-xl border border-stroke bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted dark:text-white/45">
-                  Ссылка для сотрудника
+                  Ссылка на чек-лист
                 </div>
                 {employee.data?.diaryToken ?
                   <div className="mt-2 space-y-2">
@@ -503,9 +500,34 @@ export default function EmployeeDetailPage() {
               </div>
             : null}
 
+            <EmployeeDiaryMarks
+              tasks={items}
+              loading={Boolean(tasks.isLoading)}
+              viewWeek={viewWeek}
+              diaryDate={diaryDate}
+              onDiaryDateChange={setDiaryDate}
+              onAlignWeek={() => setViewWeek(weekMondayKey(diaryDate))}
+            />
           </div>
         </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
+
+        <Card className="min-w-0">
+          <CardHeader title="Аналитика" description="Показатели по сотруднику — под таблицей недели." />
+          {overview.isLoading ?
+            <Skeleton className="mx-4 mb-6 h-[200px]" />
+          : overview.data ?
+            <div className="grid gap-3 px-4 pb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              <Metric label="Серия недель" value={`${overview.data.streakWeeks}`} />
+              <Metric label="Рост" value={`${Number(overview.data.growthPercent).toFixed(2)}%`} />
+              <Metric label="Спад" value={`${Number(overview.data.declinePercent).toFixed(2)}%`} />
+              <Metric accent label="Месяц" value={`${Number(overview.data.monthlyEfficiency).toFixed(2)}%`} />
+              <Metric accent label="Период" value={`${Number(overview.data.periodEfficiency).toFixed(2)}%`} />
+            </div>
+          : null}
+        </Card>
+
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

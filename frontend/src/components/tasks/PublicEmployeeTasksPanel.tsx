@@ -57,6 +57,19 @@ export function PublicEmployeeTasksPanel({
 
   const busy = week.isLoading;
   const items = week.data?.tasks ?? [];
+  const [sent, setSent] = React.useState(false);
+
+  const submitToManager = () => {
+    setSent(true);
+    toast.success('Отправлено руководителю');
+    const url = `${window.location.pathname}?sent=1&date=${encodeURIComponent(dayIso)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  React.useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('sent') === '1') setSent(true);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -131,6 +144,23 @@ export function PublicEmployeeTasksPanel({
             ))}
           </ul>
         )}
+
+        {items.length > 0 ?
+          <div className="mt-4 space-y-2 border-t border-stroke/60 pt-4 dark:border-white/10">
+            <Button type="button" className="w-full" disabled={patchDay.isPending} onClick={submitToManager}>
+              Отправить руководителю
+            </Button>
+            {sent ?
+              <p className="text-center text-[13px] leading-relaxed text-emerald-700 dark:text-emerald-300">
+                Отметки переданы. Руководитель видит их в профиле сотрудника → вкладка «Дневник».
+              </p>
+            : (
+              <p className="text-center text-[12px] text-muted dark:text-white/45">
+                После отправки откроется вкладка с подтверждением. Ссылку менять не нужно.
+              </p>
+            )}
+          </div>
+        : null}
       </Card>
     </div>
   );
