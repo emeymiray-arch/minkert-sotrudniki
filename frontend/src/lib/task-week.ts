@@ -1,5 +1,5 @@
 import { utcMondayIso } from '@/lib/date';
-import type { DayKey } from '@/lib/task-days';
+import { clampTaskScore, type DayKey } from '@/lib/task-days';
 
 /** Понедельник недели задачи (UTC, как на бэкенде). */
 export function weekMondayKey(raw: unknown): string {
@@ -41,7 +41,7 @@ export function taskScoreOnDate(
 ): number {
   if (weekMondayKey(task.taskDate) !== weekMondayKey(dateIso)) return -1;
   const key = dayKeyFromIso(dateIso);
-  return Number(task[key] ?? 0);
+  return clampTaskScore(task[key]);
 }
 
 export function scoreLabelRu(score: number): string {

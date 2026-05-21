@@ -10,7 +10,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { EmployeeDiaryMarks } from '@/components/tasks/EmployeeDiaryMarks';
 import { TaskDayScoreCell } from '@/components/tasks/TaskDayScoreCell';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { weekMondayKey } from '@/lib/task-week';
+import { tasksForWeek, weekMondayKey } from '@/lib/task-week';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,8 +72,10 @@ export default function EmployeeDetailPage() {
 
   const tasks = useQuery({
     enabled: Boolean(id),
-    queryKey: ['employee-tasks', id, viewWeek],
-    queryFn: () => apiJson<Task[]>(`/employees/${id}/tasks?week=${encodeURIComponent(viewWeek)}`),
+    queryKey: ['employee-tasks', id],
+    queryFn: () => apiJson<Task[]>(`/employees/${id}/tasks`),
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
   });
 
   const rolloverWeek = useMutation({
@@ -211,7 +213,7 @@ export default function EmployeeDetailPage() {
 
   if (!id) return null;
 
-  const items = tasks.data ?? [];
+  const items = tasksForWeek(tasks.data ?? [], viewWeek);
   const emp = employee.data;
   const canEdit = canEditTaskDays(user, id);
   const canMeta = canManageTasks(user);
@@ -501,12 +503,15 @@ export default function EmployeeDetailPage() {
             : null}
 
             <EmployeeDiaryMarks
-              tasks={items}
+              employeeId={id!}
+              allTasks={tasks.data}
               loading={Boolean(tasks.isLoading)}
-              viewWeek={viewWeek}
               diaryDate={diaryDate}
-              onDiaryDateChange={setDiaryDate}
-              onAlignWeek={() => setViewWeek(weekMondayKey(diaryDate))}
+              onDiaryDateChange={(iso) => {
+                setDiaryDate(iso);
+                setViewWeek(weekMondayKey(iso));
+              }}
+              canEditMarks={canMeta}
             />
           </div>
         </Card>

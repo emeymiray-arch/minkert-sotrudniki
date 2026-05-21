@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { utcDateToWeekDayDb, WEEK_DAY_LABEL_RU, WEEK_DAYS_DB, type WeekDayDb } from '../common/constants/days';
 import { addUtcDays, startUtcWeekMonday } from '../common/date/week';
@@ -37,9 +37,11 @@ export class TasksService {
 
   async list(employeeId: string, weekRaw?: string) {
     await this.ensureEmployee(employeeId);
-    const where: { employeeId: string; taskDate?: Date } = { employeeId };
+    const where: Prisma.TaskWhereInput = { employeeId };
     if (weekRaw?.trim()) {
-      where.taskDate = startUtcWeekMonday(weekRaw.trim());
+      const mon = startUtcWeekMonday(weekRaw.trim());
+      const sun = addUtcDays(mon, 6);
+      where.taskDate = { gte: mon, lte: sun };
     }
     return this.prisma.task.findMany({
       where,
@@ -190,8 +192,9 @@ export class TasksService {
     const dayIdx = WEEK_DAYS_DB.indexOf(dayKey);
     const dayLabelRu = dayIdx >= 0 ? WEEK_DAY_LABEL_RU[dayIdx] : dayKey.toUpperCase();
 
+    const weekEnd = addUtcDays(weekMonday, 6);
     const tasks = await this.prisma.task.findMany({
-      where: { employeeId: emp.id, taskDate: weekMonday },
+      where: { employeeId: emp.id, taskDate: { gte: weekMonday, lte: weekEnd } },
       orderBy: [{ createdAt: 'asc' }],
     });
 

@@ -39,6 +39,8 @@ export function PublicEmployeeTasksPanel({
         auth: false,
       }),
     enabled: Boolean(token),
+    refetchOnWindowFocus: true,
+    staleTime: 10_000,
   });
 
   const patchDay = useMutation({
@@ -83,7 +85,7 @@ export function PublicEmployeeTasksPanel({
         <p className="mt-1 text-[13px] text-muted dark:text-white/50">{subtitle}</p>
       </div>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="flex flex-col p-4 sm:p-5">
         <div className="flex flex-wrap items-end gap-3">
           <label className="grid flex-1 gap-1 text-[12px] font-medium text-zinc-800 dark:text-white/85">
             Дата
@@ -145,22 +147,30 @@ export function PublicEmployeeTasksPanel({
           </ul>
         )}
 
-        {items.length > 0 ?
-          <div className="mt-4 space-y-2 border-t border-stroke/60 pt-4 dark:border-white/10">
-            <Button type="button" className="w-full" disabled={patchDay.isPending} onClick={submitToManager}>
-              Отправить руководителю
-            </Button>
-            {sent ?
-              <p className="text-center text-[13px] leading-relaxed text-emerald-700 dark:text-emerald-300">
-                Отметки переданы. Руководитель видит их в профиле сотрудника → вкладка «Дневник».
-              </p>
-            : (
-              <p className="text-center text-[12px] text-muted dark:text-white/45">
-                После отправки откроется вкладка с подтверждением. Ссылку менять не нужно.
-              </p>
-            )}
-          </div>
-        : null}
+        <div className="mt-4 space-y-2 border-t border-stroke/60 pt-4 dark:border-white/10">
+          <Button
+            type="button"
+            className="w-full"
+            disabled={patchDay.isPending || busy || week.isError || items.length === 0}
+            onClick={submitToManager}
+          >
+            Отправить руководителю
+          </Button>
+          {items.length === 0 && !busy && !week.isError ?
+            <p className="text-center text-[12px] text-amber-700 dark:text-amber-200">
+              Нет задач на эту неделю — попросите руководителя добавить задачи на ту же неделю, что выбрана в дате выше.
+            </p>
+          : null}
+          {sent ?
+            <p className="text-center text-[13px] leading-relaxed text-emerald-700 dark:text-emerald-300">
+              Отметки переданы. Руководитель видит их в профиле → вкладка «Дневник» (та же дата).
+            </p>
+          : items.length > 0 ?
+            <p className="text-center text-[12px] text-muted dark:text-white/45">
+              Сначала отметьте задачи, затем нажмите «Отправить». Ссылку менять каждый день не нужно.
+            </p>
+          : null}
+        </div>
       </Card>
     </div>
   );
