@@ -1,10 +1,19 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { addUtcDays, startUtcMonth } from '../common/date/week';
 import { AnalyticsService } from './analytics.service';
 
 @Controller('analytics')
+@Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
+
+  /** Дневной / недельный / месячный KPI руководителя из чек-листов (даты — автоматически «сейчас»). */
+  @Get('manager-kpi')
+  managerKpi() {
+    return this.analytics.managerKpiSummary(new Date());
+  }
 
   @Get('dashboard')
   team(@Query('weekAnchor') anchor?: string) {

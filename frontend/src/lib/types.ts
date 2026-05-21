@@ -64,6 +64,18 @@ export type EmployeeDiaryRange = {
   days: DiaryDayBlock[];
 };
 
+export type ManagerKpiSummary = {
+  asOf: string;
+  weekAnchor: string;
+  month: string;
+  activeEmployees: number;
+  source: 'employee_checklists';
+  daily: { label: string; weekday: string; kpi: number };
+  weekly: { label: string; kpi: number; weekOverWeekTrend: number };
+  monthly: { label: string; kpi: number };
+  weekdayBreakdown: { key: string; label: string; efficiency: number }[];
+};
+
 export type TeamDashboard = {
   anchor: string;
   teamAvgEfficiency: number;

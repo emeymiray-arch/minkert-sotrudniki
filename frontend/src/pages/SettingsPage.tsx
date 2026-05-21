@@ -1,62 +1,38 @@
 import * as React from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/context/theme';
 import { useAuth } from '@/context/auth';
 import { cnRoleRu } from '@/lib/format';
 import { apiJson, getApiBaseUrl } from '@/lib/http';
-import { DAY_KEYS, DAY_LABEL_RU, nextStatus } from '@/lib/task-days';
+import type { ManagerKpiSummary } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-
-type ManagerTracker = {
-  title: string;
-  note: string;
-  days: Record<(typeof DAY_KEYS)[number], number>;
-};
-
-const TRACKER_KEY = 'minkert.manager.tracker.v1';
-
-function readTracker(): ManagerTracker {
-  try {
-    const raw = localStorage.getItem(TRACKER_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as ManagerTracker;
-      if (parsed && parsed.days) return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return {
-    title: 'Моя управленческая неделя',
-    note: 'Контроль команды, планирование, разбор рисков.',
-    days: { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 },
-  };
-}
 
 export default function SettingsPage() {
   const { mode, setMode } = useTheme();
   const { user, setUserProfile } = useAuth();
   const [name, setName] = React.useState(user?.name ?? '');
   const [email, setEmail] = React.useState(user?.email ?? '');
-  const [tracker, setTracker] = React.useState<ManagerTracker>(() => readTracker());
 
   const apiHint = getApiBaseUrl();
+
+  const managerKpi = useQuery({
+    queryKey: ['analytics', 'manager-kpi'],
+    queryFn: () => apiJson<ManagerKpiSummary>('/analytics/manager-kpi'),
+    refetchOnWindowFocus: true,
+  });
 
   React.useEffect(() => {
     if (!user) return;
     setName(user.name);
     setEmail(user.email);
   }, [user]);
-
-  React.useEffect(() => {
-    localStorage.setItem(TRACKER_KEY, JSON.stringify(tracker));
-  }, [tracker]);
 
   const updateProfile = useMutation({
     mutationFn: () =>
@@ -74,14 +50,11 @@ export default function SettingsPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось обновить профиль'),
   });
 
-  const trackerScore =
-    DAY_KEYS.reduce((sum, day) => sum + tracker.days[day], 0) / (DAY_KEYS.length * 2);
-
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <PageHeader
         title="Настройки"
-        description="Тема и профиль хранятся локально в браузере; API остаётся на бэкенде."
+        description="Тема и профиль. KPI руководителя считается автоматически из чек-листов команды."
       />
 
       <Card>
@@ -116,8 +89,7 @@ export default function SettingsPage() {
               </Badge>
               {user?.role === 'VIEWER' ?
                 <p className="mt-3 text-xs leading-relaxed text-muted dark:text-white/50">
-                  Отметки по дням в <strong>рабочих</strong> задачах доступны только для карточки сотрудника, привязанной к вашему
-                  аккаунту. Попросите администратора указать привязку (или выполните повторный вход после её настройки).
+                  Аккаунт начальника: разделы «Обзор» и «Аналитика» показывают KPI команды из чек-листов без ручного ввода.
                 </p>
               : null}
             </div>
@@ -128,51 +100,39 @@ export default function SettingsPage() {
       <Card>
         <CardHeader
           title="Мой KPI как руководителя"
-          description="Личный недельный трекер: 0 не сделано, 1 выполнено, 2 перевыполнено."
+          description="Считается из отметок сотрудников в чек-листах (0 → 0%, 1 → 100%, 2 → 115%). Даты выбирает система."
         />
-        <div className="space-y-4">
-          <Input
-            value={tracker.title}
-            onChange={(e) => setTracker((prev) => ({ ...prev, title: e.target.value }))}
-            placeholder="Название вашего личного управленческого фокуса"
-          />
-          <Textarea
-            value={tracker.note}
-            onChange={(e) => setTracker((prev) => ({ ...prev, note: e.target.value }))}
-            placeholder="Что вы как руководитель контролируете и улучшаете"
-          />
-
-          <div className="grid grid-cols-7 gap-2">
-            {DAY_KEYS.map((day, idx) => {
-              const val = tracker.days[day];
-              return (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() =>
-                    setTracker((prev) => ({
-                      ...prev,
-                      days: { ...prev.days, [day]: nextStatus(prev.days[day]) },
-                    }))
-                  }
-                  className={`rounded-xl border px-2 py-3 text-xs font-semibold transition ${
-                    val === 0
-                      ? 'border-stroke bg-black/10 text-muted dark:bg-white/5'
-                      : val === 1
-                        ? 'border-emerald-400/40 bg-emerald-400/20 text-zinc-900 dark:text-white'
-                        : 'border-accent/40 bg-accent/25 text-zinc-900 dark:text-white'
-                  }`}
-                >
-                  <div>{DAY_LABEL_RU[idx]}</div>
-                  <div className="mt-1 text-lg">{val}</div>
-                </button>
-              );
-            })}
+        {managerKpi.isLoading ?
+          <Skeleton className="h-[140px]" />
+        : managerKpi.data ?
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.daily.label}</div>
+                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.daily.kpi}%</div>
+                <div className="mt-1 text-xs text-muted dark:text-white/50">
+                  {managerKpi.data.daily.weekday}, {managerKpi.data.asOf}
+                </div>
+              </div>
+              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.weekly.label}</div>
+                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.weekly.kpi}%</div>
+                <div className="mt-1 text-xs text-muted dark:text-white/50">
+                  WoW: {managerKpi.data.weekly.weekOverWeekTrend >= 0 ? '+' : ''}
+                  {managerKpi.data.weekly.weekOverWeekTrend} п.п.
+                </div>
+              </div>
+              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.monthly.label}</div>
+                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.monthly.kpi}%</div>
+                <div className="mt-1 text-xs text-muted dark:text-white/50">{managerKpi.data.month}</div>
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-muted dark:text-white/50">
+              Активных сотрудников в расчёте: {managerKpi.data.activeEmployees}. Начальники с ролью «Наблюдатель» видят те же цифры в «Обзор» и «Аналитика».
+            </p>
           </div>
-          <div className="text-sm text-muted dark:text-white/55">
-            Ваш управленческий прогресс недели: <strong>{Math.round(trackerScore * 100)}%</strong>
-          </div>
-        </div>
+        : <p className="text-sm text-muted">Нет данных — добавьте задачи и дождитесь отметок в чек-листах.</p>}
       </Card>
 
       <Card>

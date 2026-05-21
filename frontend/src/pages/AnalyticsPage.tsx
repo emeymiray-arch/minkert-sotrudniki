@@ -28,7 +28,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { utcMondayIso } from '@/lib/date';
 import { apiJson } from '@/lib/http';
-import type { HeatmapRow, TeamDashboard } from '@/lib/types';
+import type { HeatmapRow, ManagerKpiSummary, TeamDashboard } from '@/lib/types';
 
 export default function AnalyticsPage() {
   const anchor = utcMondayIso();
@@ -36,6 +36,12 @@ export default function AnalyticsPage() {
   const dashboard = useQuery({
     queryKey: ['analytics', 'dashboard', anchor],
     queryFn: () => apiJson<TeamDashboard>(`/analytics/dashboard?weekAnchor=${anchor}`),
+  });
+
+  const managerKpi = useQuery({
+    queryKey: ['analytics', 'manager-kpi'],
+    queryFn: () => apiJson<ManagerKpiSummary>('/analytics/manager-kpi'),
+    refetchOnWindowFocus: true,
   });
 
   const heatmap = useQuery({
@@ -74,8 +80,14 @@ export default function AnalyticsPage() {
         title="Аналитика"
         description={
           <span className="flex flex-wrap items-center gap-2">
-            KPI команды, динамика и тепловая карта по дням недели.
-            <Badge tone="neutral">Среднее: {dashboard.data?.teamAvgEfficiency ?? '—'}%</Badge>
+            Дневная, недельная и месячная аналитика из чек-листов — даты подставляются автоматически.
+            {managerKpi.data ?
+              <Badge tone="success">День: {managerKpi.data.daily.kpi}%</Badge>
+            : null}
+            <Badge tone="neutral">Неделя: {managerKpi.data?.weekly.kpi ?? dashboard.data?.teamAvgEfficiency ?? '—'}%</Badge>
+            {managerKpi.data ?
+              <Badge tone="neutral">Месяц: {managerKpi.data.monthly.kpi}%</Badge>
+            : null}
             <Badge tone={dashboard.data && dashboard.data.weekOverWeekTrend >= 0 ? 'success' : 'warning'}>
               WoW:{` ${dashboard.data ? `${dashboard.data.weekOverWeekTrend >= 0 ? '+' : ''}${dashboard.data.weekOverWeekTrend.toFixed(2)} п.п.` : '—'}`}
             </Badge>
@@ -87,6 +99,31 @@ export default function AnalyticsPage() {
           </Button>
         }
       />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {managerKpi.isLoading ?
+          <>
+            <Skeleton className="h-[100px]" />
+            <Skeleton className="h-[100px]" />
+            <Skeleton className="h-[100px]" />
+          </>
+        : managerKpi.data ?
+          <>
+            <Card>
+              <CardHeader title="Дневной KPI" description={`${managerKpi.data.daily.weekday}, ${managerKpi.data.asOf}`} />
+              <div className="text-3xl font-semibold tabular-nums">{managerKpi.data.daily.kpi}%</div>
+            </Card>
+            <Card>
+              <CardHeader title="Недельный KPI" description={`Неделя с ${managerKpi.data.weekAnchor}`} />
+              <div className="text-3xl font-semibold tabular-nums">{managerKpi.data.weekly.kpi}%</div>
+            </Card>
+            <Card>
+              <CardHeader title="Месячный KPI" description={managerKpi.data.month} />
+              <div className="text-3xl font-semibold tabular-nums">{managerKpi.data.monthly.kpi}%</div>
+            </Card>
+          </>
+        : null}
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-12">
         <Card className="xl:col-span-5">

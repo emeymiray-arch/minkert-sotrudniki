@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EmployeeStatus, Task } from '@prisma/client';
-import { WEEK_DAYS_DB } from '../common/constants/days';
+import { utcDateToWeekDayDb, WEEK_DAYS_DB } from '../common/constants/days';
 import {
   TaskDayValues,
   percentForStatus,
@@ -70,11 +70,12 @@ export class AnalyticsService {
 
   async snapshotsForEmployees(employeeIds: string[], weekStart: Date) {
     const anchor = startUtcWeekMonday(weekStart);
+    const weekEnd = addUtcDays(anchor, 6);
     if (!employeeIds.length) return {};
     const tasks = await this.prisma.task.findMany({
       where: {
         employeeId: { in: employeeIds },
-        taskDate: anchor,
+        taskDate: { gte: anchor, lte: weekEnd },
       },
       select: {
         employeeId: true,
@@ -205,11 +206,12 @@ export class AnalyticsService {
     const worst = leaderboard.filter((x) => x.weeklyEfficiency > 0).slice(-5).reverse();
     const teamAvgEfficiency = leaderboard.length ? this.avg(leaderboard.map((x) => x.weeklyEfficiency)) : 0;
 
+    const weekEnd = addUtcDays(anchor, 6);
     /* Задачи с низкой готовностью в выбранной неделе */
     const weekTasks = await this.prisma.task.findMany({
       where: {
         employeeId: { in: ids },
-        taskDate: anchor,
+        taskDate: { gte: anchor, lte: weekEnd },
       },
       include: {
         employee: true,
@@ -239,6 +241,100 @@ export class AnalyticsService {
       best,
       atRiskEmployees: worst,
       lowPerformingTasks: lowTasks,
+    };
+  }
+
+  /**
+   * KPI руководителя = агрегат отметок чек-листов команды (0/1/2 → 0%/100%/115%).
+   * Периоды считаются автоматически: сегодня, текущая неделя, текущий месяц.
+   */
+  async managerKpiSummary(asOf = new Date()) {
+    const today = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+    const weekMonday = startUtcWeekMonday(today);
+    const weekEnd = addUtcDays(weekMonday, 6);
+    const monthStart = startUtcMonth(today);
+    const monthEnd = endUtcMonth(today);
+
+    const employees = await this.prisma.employee.findMany({
+      where: { status: EmployeeStatus.ACTIVE },
+      select: { id: true },
+    });
+    const ids = employees.map((e) => e.id);
+
+    const taskSelect = {
+      employeeId: true,
+      taskDate: true,
+      mon: true,
+      tue: true,
+      wed: true,
+      thu: true,
+      fri: true,
+      sat: true,
+      sun: true,
+    } as const;
+
+    const weekTasks =
+      ids.length ?
+        await this.prisma.task.findMany({
+          where: { employeeId: { in: ids }, taskDate: { gte: weekMonday, lte: weekEnd } },
+          select: taskSelect,
+        })
+      : [];
+
+    const todayCol = utcDateToWeekDayDb(today);
+    const dailyKpi = weekTasks.length
+      ? this.avg(weekTasks.map((t) => percentForStatus((t as never)[todayCol] as number)))
+      : 0;
+
+    const snapMap = await this.snapshotsForEmployees(ids, weekMonday);
+    const weeklyValues = ids.map((id) => snapMap[id]?.weeklyEfficiency ?? 0);
+    const weeklyKpi = weeklyValues.length ? this.avg(weeklyValues) : 0;
+
+    const prevMonday = addUtcDays(weekMonday, -7);
+    const prevSnap = await this.snapshotsForEmployees(ids, prevMonday);
+    const prevWeekly = ids.length ? this.avg(ids.map((id) => prevSnap[id]?.weeklyEfficiency ?? 0)) : 0;
+    const weekOverWeekTrend = Number((weeklyKpi - prevWeekly).toFixed(2));
+
+    const monthTasks =
+      ids.length ?
+        await this.prisma.task.findMany({
+          where: { employeeId: { in: ids }, taskDate: { gte: monthStart, lte: monthEnd } },
+          select: taskSelect,
+        })
+      : [];
+    const monthlyKpi = monthTasks.length
+      ? this.avg(monthTasks.map((t) => taskWeekEfficiencyPercent(this.taskVals(t as TaskWeekRow))))
+      : 0;
+
+    const weekdayBreakdown = WEEK_DAYS_DB.map((col, idx) => ({
+      key: col,
+      label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
+      efficiency: weekTasks.length
+        ? Number(this.avg(weekTasks.map((t) => percentForStatus((t as never)[col] as number))).toFixed(2))
+        : 0,
+    }));
+
+    return {
+      asOf: today.toISOString().slice(0, 10),
+      weekAnchor: weekMonday.toISOString().slice(0, 10),
+      month: `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`,
+      activeEmployees: ids.length,
+      source: 'employee_checklists' as const,
+      daily: {
+        label: 'Сегодня',
+        weekday: ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'][today.getUTCDay()],
+        kpi: Number(dailyKpi.toFixed(2)),
+      },
+      weekly: {
+        label: 'Текущая неделя',
+        kpi: Number(weeklyKpi.toFixed(2)),
+        weekOverWeekTrend,
+      },
+      monthly: {
+        label: 'Текущий месяц',
+        kpi: Number(monthlyKpi.toFixed(2)),
+      },
+      weekdayBreakdown,
     };
   }
 

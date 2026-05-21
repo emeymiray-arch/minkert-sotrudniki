@@ -10,7 +10,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { utcMondayIso } from '@/lib/date';
 import { apiJson } from '@/lib/http';
-import type { EmployeeListItem, TeamDashboard } from '@/lib/types';
+import type { EmployeeListItem, ManagerKpiSummary, TeamDashboard } from '@/lib/types';
 
 function NameList({ ids, items }: { ids: string[]; items: EmployeeListItem[] }) {
   const map = new Map(items.map((e) => [e.id, e.name]));
@@ -37,6 +37,12 @@ export default function DashboardPage() {
     queryFn: () => apiJson<TeamDashboard>(`/analytics/dashboard?weekAnchor=${anchor}`),
   });
 
+  const managerKpi = useQuery({
+    queryKey: ['analytics', 'manager-kpi'],
+    queryFn: () => apiJson<ManagerKpiSummary>('/analytics/manager-kpi'),
+    refetchOnWindowFocus: true,
+  });
+
   const employees = useQuery({
     queryKey: ['employees'],
     queryFn: async () => apiJson<{ items: EmployeeListItem[] }>(`/employees?sort=nameAsc&weekAnchor=${encodeURIComponent(anchor)}`),
@@ -56,8 +62,10 @@ export default function DashboardPage() {
         title="Обзор"
         description={
           <span className="flex flex-wrap items-center gap-2">
-            Недельный KPI команды и быстрая диагностика задач.
-            <Badge tone="success">Якорь недели: {anchor}</Badge>
+            Ваш KPI считается автоматически из чек-листов сотрудников (день / неделя / месяц).
+            {managerKpi.data ?
+              <Badge tone="neutral">На {managerKpi.data.asOf}</Badge>
+            : null}
           </span>
         }
         actions={
@@ -75,9 +83,41 @@ export default function DashboardPage() {
         }
       />
 
+      <div className="grid gap-4 md:grid-cols-3">
+        {managerKpi.isLoading ?
+          <>
+            <Skeleton className="h-[120px]" />
+            <Skeleton className="h-[120px]" />
+            <Skeleton className="h-[120px]" />
+          </>
+        : managerKpi.data ?
+          <>
+            <Card>
+              <CardHeader title={managerKpi.data.daily.label} description={`${managerKpi.data.daily.weekday} · из отметок чек-листов`} />
+              <div className="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.daily.kpi.toFixed(1)}%</div>
+            </Card>
+            <Card>
+              <CardHeader title={managerKpi.data.weekly.label} description="Среднее по команде за неделю" />
+              <div className="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.weekly.kpi.toFixed(1)}%</div>
+              <div className="mt-2 text-[13px] text-muted dark:text-white/50">
+                К прошлой неделе:{` `}
+                <strong className="text-zinc-900 dark:text-white">
+                  {managerKpi.data.weekly.weekOverWeekTrend >= 0 ? '+' : ''}
+                  {managerKpi.data.weekly.weekOverWeekTrend.toFixed(2)} п.п.
+                </strong>
+              </div>
+            </Card>
+            <Card>
+              <CardHeader title={managerKpi.data.monthly.label} description={`${managerKpi.data.month} · все задачи месяца`} />
+              <div className="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.monthly.kpi.toFixed(1)}%</div>
+            </Card>
+          </>
+        : null}
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-12">
         <Card className="xl:col-span-4">
-          <CardHeader title="Командное KPI" description="Средняя недельная эффективность активных участников." />
+          <CardHeader title="Командное KPI" description="То же, что недельный показатель выше — для сравнения с прошлой неделей." />
           {dashboard.isLoading ?
             <Skeleton className="h-[164px]" />
           : <>
