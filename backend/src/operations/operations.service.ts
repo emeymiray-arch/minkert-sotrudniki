@@ -236,7 +236,7 @@ export class OperationsService {
       data: {
         taskId,
         userId: user?.sub,
-        authorName: user?.email ?? 'Управляющая',
+        authorName: user?.email ?? 'Контроль',
         body: body.trim(),
       },
     });

@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { to: '/', label: 'Обзор', icon: LayoutDashboard, end: true },
-  { to: '/upravlenie', label: 'Управляющая', icon: Briefcase, end: false },
+  { to: '/upravlenie', label: 'Контроль', icon: Briefcase, end: false },
   { to: '/employees', label: 'Сотрудники', icon: Users2, end: false },
   { to: '/analytics', label: 'Аналитика', icon: LineChart, end: false },
   { to: '/settings', label: 'Настройки', icon: Settings2, end: false },

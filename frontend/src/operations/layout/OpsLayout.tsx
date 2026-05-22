@@ -13,7 +13,7 @@ export function OpsLayout() {
             <Briefcase className="size-5" aria-hidden />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">Управление</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">Контроль</h1>
             <p className="text-[13px] text-muted dark:text-white/50">Операционная панель салона</p>
           </div>
         </div>
