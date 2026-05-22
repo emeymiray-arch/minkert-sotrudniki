@@ -13,6 +13,15 @@ import LoginPage from '@/pages/LoginPage';
 import PublicDiaryPage from '@/pages/PublicDiaryPage';
 import PublicEmployeeTasksPage from '@/pages/PublicEmployeeTasksPage';
 import SettingsPage from '@/pages/SettingsPage';
+import { OpsLayout } from '@/operations/layout/OpsLayout';
+import OpsAnalyticsPage from '@/operations/pages/OpsAnalyticsPage';
+import OpsBlockPage from '@/operations/pages/OpsBlockPage';
+import OpsContentPage from '@/operations/pages/OpsContentPage';
+import OpsDashboardPage from '@/operations/pages/OpsDashboardPage';
+import OpsSettingsPage from '@/operations/pages/OpsSettingsPage';
+import OpsStaffDetailPage from '@/operations/pages/OpsStaffDetailPage';
+import OpsStaffPage from '@/operations/pages/OpsStaffPage';
+import OpsViolationsPage from '@/operations/pages/OpsViolationsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +74,21 @@ export default function App() {
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+
+              <Route path="/upravlenie" element={<OpsLayout />}>
+                <Route index element={<OpsDashboardPage />} />
+                <Route path="utro" element={<OpsBlockPage />} />
+                <Route path="den" element={<OpsBlockPage />} />
+                <Route path="vecher" element={<OpsBlockPage />} />
+                <Route path="sleduyushchiy-den" element={<OpsBlockPage />} />
+                <Route path="nedelya" element={<OpsBlockPage />} />
+                <Route path="sotrudniki" element={<OpsStaffPage />} />
+                <Route path="sotrudniki/:id" element={<OpsStaffDetailPage />} />
+                <Route path="narusheniya" element={<OpsViolationsPage />} />
+                <Route path="kontent" element={<OpsContentPage />} />
+                <Route path="analitika" element={<OpsAnalyticsPage />} />
+                <Route path="nastroyki" element={<OpsSettingsPage />} />
+              </Route>
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
