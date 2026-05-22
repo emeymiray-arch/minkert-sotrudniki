@@ -10,9 +10,9 @@ import {
   Prisma,
 } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
-import { startUtcWeekMonday } from '../common/date/week';
+import { addUtcDays, startUtcWeekMonday } from '../common/date/week';
 import { PrismaService } from '../prisma/prisma.service';
-import { OPS_DEFAULT_BLOCKS } from './operations.constants';
+import { OPS_DEFAULT_BLOCKS, OPS_DEFAULT_CATEGORY_TITLES } from './operations.constants';
 
 function parseDayParam(raw?: string): Date {
   if (!raw?.trim()) {
@@ -79,6 +79,24 @@ export class OperationsService {
     return row;
   }
 
+  private categoryAnchorDate(block: OpsTimeBlock, forDate: Date): Date {
+    return block === OpsTimeBlock.WEEK ? startUtcWeekMonday(forDate) : forDate;
+  }
+
+  private taskWhereForBlock(block: OpsTimeBlock, forDate: Date): Prisma.OpsTaskWhereInput {
+    if (block === OpsTimeBlock.WEEK) {
+      const mon = startUtcWeekMonday(forDate);
+      return { block, forDate: { gte: mon, lte: addUtcDays(mon, 6) } };
+    }
+    return { block, forDate };
+  }
+
+  private readonly taskInclude = {
+    assignee: { select: { id: true, name: true, position: true } },
+    comments: { orderBy: { createdAt: 'desc' as const }, take: 3 },
+    notes: { orderBy: { updatedAt: 'desc' as const }, take: 2 },
+  };
+
   private async applyOverdue(forDate: Date) {
     const now = new Date();
     await this.prisma.opsTask.updateMany({
@@ -89,6 +107,111 @@ export class OperationsService {
       },
       data: { status: OpsTaskStatus.OVERDUE },
     });
+  }
+
+  async ensureCategoriesForBoard(block: OpsTimeBlock, anchor: Date) {
+    const count = await this.prisma.opsCategory.count({ where: { block, forDate: anchor } });
+    if (count > 0) return;
+    for (let i = 0; i < OPS_DEFAULT_CATEGORY_TITLES.length; i++) {
+      await this.prisma.opsCategory.create({
+        data: {
+          block,
+          forDate: anchor,
+          title: OPS_DEFAULT_CATEGORY_TITLES[i]!,
+          sortOrder: i,
+        },
+      });
+    }
+  }
+
+  async getBoard(block: OpsTimeBlock, dateRaw?: string) {
+    await this.ensureDefaults();
+    const forDate = parseDayParam(dateRaw);
+    const anchor = this.categoryAnchorDate(block, forDate);
+    await this.applyOverdue(forDate);
+    await this.ensureCategoriesForBoard(block, anchor);
+
+    const taskWhere = this.taskWhereForBlock(block, forDate);
+    const categories = await this.prisma.opsCategory.findMany({
+      where: { block, forDate: anchor },
+      orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }],
+      include: {
+        tasks: {
+          where: taskWhere,
+          orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+          include: this.taskInclude,
+        },
+      },
+    });
+
+    const uncategorized = await this.prisma.opsTask.findMany({
+      where: { ...taskWhere, categoryId: null },
+      orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+      include: this.taskInclude,
+    });
+
+    return {
+      forDate: isoDate(forDate),
+      anchorDate: isoDate(anchor),
+      block,
+      categories: categories.map((c) => ({
+        id: c.id,
+        title: c.title,
+        sortOrder: c.sortOrder,
+        pinned: c.pinned,
+        taskCount: c.tasks.length,
+        tasks: c.tasks,
+      })),
+      uncategorized,
+    };
+  }
+
+  async createCategory(
+    user: JwtUserPayload | undefined,
+    body: { block: OpsTimeBlock; forDate?: string; title: string },
+  ) {
+    const forDate = parseDayParam(body.forDate);
+    const anchor = this.categoryAnchorDate(body.block, forDate);
+    const max = await this.prisma.opsCategory.aggregate({
+      where: { block: body.block, forDate: anchor },
+      _max: { sortOrder: true },
+    });
+    const cat = await this.prisma.opsCategory.create({
+      data: {
+        block: body.block,
+        forDate: anchor,
+        title: body.title.trim(),
+        sortOrder: (max._max.sortOrder ?? -1) + 1,
+      },
+    });
+    await this.log(user, 'category', cat.id, 'create', { title: cat.title });
+    return cat;
+  }
+
+  async updateCategory(
+    user: JwtUserPayload | undefined,
+    id: string,
+    body: Partial<{ title: string; pinned: boolean; sortOrder: number }>,
+  ) {
+    const cat = await this.prisma.opsCategory.update({ where: { id }, data: body });
+    await this.log(user, 'category', id, 'update', body as Prisma.InputJsonValue);
+    return cat;
+  }
+
+  async deleteCategory(user: JwtUserPayload | undefined, id: string) {
+    await this.prisma.opsCategory.delete({ where: { id } });
+    await this.log(user, 'category', id, 'delete');
+    return { ok: true };
+  }
+
+  async reorderCategories(user: JwtUserPayload | undefined, orderedIds: string[]) {
+    await Promise.all(
+      orderedIds.map((id, sortOrder) =>
+        this.prisma.opsCategory.update({ where: { id }, data: { sortOrder } }),
+      ),
+    );
+    await this.log(user, 'category', 'batch', 'reorder', { orderedIds });
+    return { ok: true };
   }
 
   async listTasks(block: OpsTimeBlock, dateRaw?: string) {
@@ -107,11 +230,7 @@ export class OperationsService {
     const items = await this.prisma.opsTask.findMany({
       where,
       orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: {
-        assignee: { select: { id: true, name: true, position: true } },
-        comments: { orderBy: { createdAt: 'desc' }, take: 5 },
-        notes: { orderBy: { updatedAt: 'desc' }, take: 3 },
-      },
+      include: this.taskInclude,
     });
     return { forDate: isoDate(forDate), block, items };
   }
@@ -128,16 +247,21 @@ export class OperationsService {
       pinned?: boolean;
       recurring?: boolean;
       templateKey?: string | null;
+      categoryId?: string | null;
     },
   ) {
     const forDate = parseDayParam(body.forDate);
+    const taskWhere = body.categoryId
+      ? { categoryId: body.categoryId }
+      : this.taskWhereForBlock(body.block, forDate);
     const max = await this.prisma.opsTask.aggregate({
-      where: { block: body.block, forDate },
+      where: taskWhere,
       _max: { sortOrder: true },
     });
     const task = await this.prisma.opsTask.create({
       data: {
         block: body.block,
+        categoryId: body.categoryId || null,
         title: body.title.trim(),
         description: body.description?.trim() ?? '',
         forDate,
@@ -166,6 +290,7 @@ export class OperationsService {
       pinned: boolean;
       block: OpsTimeBlock;
       forDate: string;
+      categoryId: string | null;
     }>,
   ) {
     const prev = await this.prisma.opsTask.findUnique({ where: { id } });
@@ -180,6 +305,9 @@ export class OperationsService {
     if (body.pinned !== undefined) data.pinned = body.pinned;
     if (body.block !== undefined) data.block = body.block;
     if (body.forDate !== undefined) data.forDate = parseDayParam(body.forDate);
+    if (body.categoryId !== undefined) {
+      data.category = body.categoryId ? { connect: { id: body.categoryId } } : { disconnect: true };
+    }
     if (body.status !== undefined) {
       data.status = body.status;
       data.markedAt = new Date();
@@ -224,6 +352,7 @@ export class OperationsService {
       pinned: src.pinned,
       recurring: src.recurring,
       templateKey: src.templateKey,
+      categoryId: src.categoryId,
     });
   }
 

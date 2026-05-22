@@ -118,9 +118,25 @@ model OpsBlockConfig {
   updatedAt DateTime     @updatedAt
 }
 
+model OpsCategory {
+  id        String       @id @default(cuid())
+  block     OpsTimeBlock
+  forDate   DateTime     @db.Date
+  title     String
+  sortOrder Int          @default(0)
+  pinned    Boolean      @default(false)
+  tasks     OpsTask[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([block, forDate])
+}
+
 model OpsTask {
   id           String        @id @default(cuid())
   block        OpsTimeBlock
+  categoryId   String?
+  category     OpsCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   title        String
   description  String        @default("")
   sortOrder    Int           @default(0)
@@ -141,6 +157,7 @@ model OpsTask {
 
   @@index([block, forDate])
   @@index([forDate])
+  @@index([categoryId])
   @@index([assigneeId])
   @@index([status])
 }

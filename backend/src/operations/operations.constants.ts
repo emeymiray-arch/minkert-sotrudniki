@@ -20,6 +20,16 @@ export const OPS_DEFAULT_BLOCKS: Array<{
   { block: OpsTimeBlock.WEEK, title: 'Неделя', timeStart: '00:00', timeEnd: '23:59', sortOrder: 4 },
 ];
 
+/** Стартовые категории при первом открытии блока за день. */
+export const OPS_DEFAULT_CATEGORY_TITLES = [
+  'Дисциплина сотрудников',
+  'Проверка отчётов',
+  'Контент',
+  'Аналитика',
+  'Сотрудники',
+  'Расходники',
+] as const;
+
 export const OPS_STATUS_LABEL: Record<string, string> = {
   PENDING: 'Ожидает',
   DONE: 'Сделано',

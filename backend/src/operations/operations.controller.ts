@@ -38,9 +38,41 @@ export class OperationsController {
     return this.ops.updateBlock(block, body, user);
   }
 
+  @Get('board')
+  board(@Query('block') block: OpsTimeBlock, @Query('date') date?: string) {
+    return this.ops.getBoard(block, date);
+  }
+
   @Get('tasks')
   listTasks(@Query('block') block: OpsTimeBlock, @Query('date') date?: string) {
     return this.ops.listTasks(block, date);
+  }
+
+  @Post('categories')
+  createCategory(
+    @CurrentUser() user: JwtUserPayload,
+    @Body() body: { block: OpsTimeBlock; forDate?: string; title: string },
+  ) {
+    return this.ops.createCategory(user, body);
+  }
+
+  @Patch('categories/:id')
+  updateCategory(
+    @CurrentUser() user: JwtUserPayload,
+    @Param('id') id: string,
+    @Body() body: Partial<{ title: string; pinned: boolean; sortOrder: number }>,
+  ) {
+    return this.ops.updateCategory(user, id, body);
+  }
+
+  @Delete('categories/:id')
+  deleteCategory(@CurrentUser() user: JwtUserPayload, @Param('id') id: string) {
+    return this.ops.deleteCategory(user, id);
+  }
+
+  @Post('categories/reorder')
+  reorderCategories(@CurrentUser() user: JwtUserPayload, @Body() body: { orderedIds: string[] }) {
+    return this.ops.reorderCategories(user, body.orderedIds ?? []);
   }
 
   @Post('tasks')
@@ -57,6 +89,7 @@ export class OperationsController {
       pinned?: boolean;
       recurring?: boolean;
       templateKey?: string | null;
+      categoryId?: string | null;
     },
   ) {
     return this.ops.createTask(user, body);
@@ -76,6 +109,7 @@ export class OperationsController {
       pinned: boolean;
       block: OpsTimeBlock;
       forDate: string;
+      categoryId: string | null;
     }>,
   ) {
     return this.ops.updateTask(user, id, body);

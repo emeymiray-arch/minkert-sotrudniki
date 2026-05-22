@@ -27,9 +27,27 @@ export type OpsBlockConfig = {
   enabled: boolean;
 };
 
+export type OpsCategory = {
+  id: string;
+  title: string;
+  sortOrder: number;
+  pinned: boolean;
+  taskCount: number;
+  tasks: OpsTask[];
+};
+
+export type OpsBoard = {
+  forDate: string;
+  anchorDate: string;
+  block: OpsTimeBlock;
+  categories: OpsCategory[];
+  uncategorized: OpsTask[];
+};
+
 export type OpsTask = {
   id: string;
   block: OpsTimeBlock;
+  categoryId?: string | null;
   title: string;
   description: string;
   sortOrder: number;
