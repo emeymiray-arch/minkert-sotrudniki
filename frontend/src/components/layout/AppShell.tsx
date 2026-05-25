@@ -1,8 +1,8 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion } from 'framer-motion';
-import { Briefcase, ChevronDown, LayoutDashboard, LineChart, LogOut, Menu, Settings2, Sparkles, Users2 } from 'lucide-react';
+import { Briefcase, ChevronDown, LayoutDashboard, LineChart, LogOut, Menu, Settings2, Sparkles, Users2, Wallet } from 'lucide-react';
 import * as React from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { to: '/', label: 'Обзор', icon: LayoutDashboard, end: true },
   { to: '/upravlenie', label: 'Контроль', icon: Briefcase, end: false },
+  { to: '/finansy', label: 'Финансы', icon: Wallet, end: false },
   { to: '/employees', label: 'Сотрудники', icon: Users2, end: false },
   { to: '/analytics', label: 'Аналитика', icon: LineChart, end: false },
   { to: '/settings', label: 'Настройки', icon: Settings2, end: false },
@@ -59,10 +60,14 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+const WIDE_ROUTES = new Set(['/finansy']);
+
 export function AppShell({ children }: { children?: React.ReactNode }) {
   const { logout, user } = useAuth();
   const { mode, setMode } = useTheme();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const { pathname } = useLocation();
+  const wideMain = WIDE_ROUTES.has(pathname);
 
   const content = children ?? <Outlet />;
 
@@ -157,7 +162,12 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
           </DropdownMenu.Root>
         </header>
 
-        <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <main
+          className={cn(
+            'mx-auto w-full flex-1 px-4 py-8 sm:px-6 lg:px-8',
+            wideMain ? 'max-w-[min(100%,1680px)]' : 'max-w-[1200px]',
+          )}
+        >
           <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }}>
             {content}
           </motion.div>

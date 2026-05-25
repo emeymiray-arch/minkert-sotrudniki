@@ -2,12 +2,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
-import { todayIso } from '@/operations/constants';
 
 type Period = 'month' | 'week' | 'halfyear' | 'year';
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 type FinanceTable = {
   period: Period;
@@ -58,7 +62,7 @@ function shiftAnchor(anchor: string, period: Period, dir: -1 | 1): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function OpsFinancePage() {
+export default function FinancePage() {
   const [period, setPeriod] = React.useState<Period>('month');
   const [anchor, setAnchor] = React.useState(() => {
     const t = todayIso();
@@ -67,7 +71,7 @@ export default function OpsFinancePage() {
   const qc = useQueryClient();
 
   const tableQ = useQuery({
-    queryKey: ['ops', 'finance', period, anchor],
+    queryKey: ['finance', period, anchor],
     queryFn: () => apiJson<FinanceTable>(`/operations/finance/table?period=${period}&anchor=${anchor}`),
   });
 
@@ -78,31 +82,34 @@ export default function OpsFinancePage() {
       else payload[body.field] = body.value;
       return apiJson('/operations/finance/day', { method: 'PATCH', body: JSON.stringify(payload) });
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['ops', 'finance', period, anchor] }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['finance', period, anchor] }),
   });
 
   const data = tableQ.data;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Финансы</h2>
-        <div className="flex flex-wrap gap-1">
-          {PERIODS.map((p) => (
-            <Button
-              key={p.id}
-              type="button"
-              size="sm"
-              variant={period === p.id ? 'primary' : 'outline'}
-              onClick={() => setPeriod(p.id)}
-            >
-              {p.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Финансы"
+        description="Выручка, расходы, ЗП и клиентки — таблица по дням, месяцам и году."
+        actions={
+          <div className="flex flex-wrap gap-1">
+            {PERIODS.map((p) => (
+              <Button
+                key={p.id}
+                type="button"
+                size="sm"
+                variant={period === p.id ? 'primary' : 'outline'}
+                onClick={() => setPeriod(p.id)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+        }
+      />
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2">
         <Button type="button" variant="outline" size="icon" onClick={() => setAnchor((a) => shiftAnchor(a, period, -1))}>
           <ChevronLeft className="size-4" />
         </Button>
@@ -119,21 +126,21 @@ export default function OpsFinancePage() {
       : !data ?
         null
       : <div className="overflow-x-auto rounded-xl border border-stroke dark:border-white/[0.08]">
-          <table className="w-full min-w-[720px] border-collapse text-xs">
+          <table className="w-full min-w-full border-collapse text-sm">
             <thead>
               <tr className="bg-black/[0.03] dark:bg-white/[0.04]">
-                <th className="sticky left-0 z-10 min-w-[10rem] border-b border-stroke bg-[hsl(var(--panel))] px-3 py-2 text-left font-bold uppercase tracking-wide dark:border-white/[0.08]">
+                <th className="sticky left-0 z-10 min-w-[13rem] border-b border-stroke bg-[hsl(var(--panel))] px-4 py-3 text-left text-sm font-bold uppercase tracking-wide dark:border-white/[0.08]">
                   {data.title}
                 </th>
                 {data.columns.map((col) => (
                   <th
                     key={col.key}
-                    className="min-w-[3.25rem] border-b border-l border-stroke px-1 py-2 text-center font-bold tabular-nums dark:border-white/[0.08]"
+                    className="min-w-[4.75rem] border-b border-l border-stroke px-2 py-3 text-center text-sm font-bold tabular-nums dark:border-white/[0.08]"
                   >
                     {col.label}
                   </th>
                 ))}
-                <th className="min-w-[4.5rem] border-b border-l border-stroke bg-accent/10 px-2 py-2 text-center font-bold dark:border-white/[0.08]">
+                <th className="min-w-[6.5rem] border-b border-l border-stroke bg-accent/10 px-3 py-3 text-center text-sm font-bold dark:border-white/[0.08]">
                   ИТОГО
                 </th>
               </tr>
@@ -141,18 +148,18 @@ export default function OpsFinancePage() {
             <tbody>
               {data.rows.map((row) => (
                 <tr key={row.key} className="border-b border-stroke/60 dark:border-white/[0.06]">
-                  <td className="sticky left-0 z-10 border-r border-stroke bg-[hsl(var(--panel))] px-3 py-1.5 font-semibold text-zinc-800 dark:border-white/[0.08] dark:text-white/90">
+                  <td className="sticky left-0 z-10 border-r border-stroke bg-[hsl(var(--panel))] px-4 py-2.5 text-sm font-semibold text-zinc-800 dark:border-white/[0.08] dark:text-white/90">
                     {row.label}
                   </td>
                   {row.values.map((val, idx) => {
                     const col = data.columns[idx]!;
                     const editable = (period === 'month' || period === 'week') && EDITABLE_ROWS.has(row.key);
                     return (
-                      <td key={col.key} className="border-l border-stroke/50 px-0.5 py-0.5 text-center dark:border-white/[0.06]">
+                      <td key={col.key} className="border-l border-stroke/50 px-1 py-1 text-center dark:border-white/[0.06]">
                         {editable ?
                           <input
                             type="number"
-                            className="h-7 w-full min-w-[3rem] border-0 bg-transparent text-center text-xs tabular-nums outline-none focus:bg-accent/10 dark:text-white"
+                            className="h-9 w-full min-w-[4.25rem] border-0 bg-transparent text-center text-sm tabular-nums outline-none focus:bg-accent/10 dark:text-white"
                             defaultValue={val || ''}
                             onBlur={(e) => {
                               const n = Math.round(Number(e.target.value) || 0);
@@ -160,31 +167,33 @@ export default function OpsFinancePage() {
                               if (n !== val) saveMu.mutate({ date: col.date, field, value: n });
                             }}
                           />
-                        : <span className={`tabular-nums ${row.key === 'net' ? 'font-medium text-emerald-700 dark:text-emerald-400' : ''}`}>
-                            {fmt(val)}
-                          </span>
+                        : <span
+                          className={`inline-block min-w-[4.25rem] py-1 text-sm tabular-nums ${row.key === 'net' ? 'font-semibold text-emerald-700 dark:text-emerald-400' : ''}`}
+                        >
+                          {fmt(val)}
+                        </span>
                         }
                       </td>
                     );
                   })}
-                  <td className="border-l border-stroke bg-black/[0.02] px-2 py-1.5 text-center font-bold tabular-nums dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <td className="border-l border-stroke bg-black/[0.02] px-3 py-2.5 text-center text-sm font-bold tabular-nums dark:border-white/[0.08] dark:bg-white/[0.03]">
                     {fmt(row.total)}
                   </td>
                 </tr>
               ))}
               <tr className="bg-accent/5 font-bold dark:bg-accent/10">
-                <td className="sticky left-0 z-10 border-r border-stroke bg-[hsl(var(--panel))] px-3 py-2 dark:border-white/[0.08]">
+                <td className="sticky left-0 z-10 border-r border-stroke bg-[hsl(var(--panel))] px-4 py-3 text-sm dark:border-white/[0.08]">
                   Итого по столбцу
                 </td>
                 {data.columnFooters.map((f) => (
-                  <td key={f.date} className="border-l border-stroke/50 px-1 py-2 text-center text-[10px] leading-tight dark:border-white/[0.06]">
-                    <div className="text-emerald-700 dark:text-emerald-400">{fmt(f.net)}</div>
+                  <td key={f.date} className="border-l border-stroke/50 px-2 py-3 text-center text-xs leading-snug dark:border-white/[0.06]">
+                    <div className="text-sm text-emerald-700 dark:text-emerald-400">{fmt(f.net)}</div>
                     <div className="text-muted dark:text-white/40">{f.clientCount} кл.</div>
                   </td>
                 ))}
-                <td className="border-l border-stroke px-2 py-2 text-center dark:border-white/[0.08]">
-                  <div>{fmt(data.grandTotal.net)}</div>
-                  <div className="text-[10px] font-normal text-muted">{data.grandTotal.clientCount} кл.</div>
+                <td className="border-l border-stroke px-3 py-3 text-center dark:border-white/[0.08]">
+                  <div className="text-sm">{fmt(data.grandTotal.net)}</div>
+                  <div className="text-xs font-normal text-muted">{data.grandTotal.clientCount} кл.</div>
                 </td>
               </tr>
             </tbody>
@@ -193,7 +202,7 @@ export default function OpsFinancePage() {
       }
 
       {data ?
-        <div className="flex flex-wrap gap-4 text-xs text-muted dark:text-white/50">
+        <div className="flex flex-wrap gap-6 text-sm text-muted dark:text-white/50">
           <span>
             Выручка: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.revenue)}</strong>
           </span>

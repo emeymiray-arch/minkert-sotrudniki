@@ -22,7 +22,6 @@ export const OPS_NAV = [
   { to: '/upravlenie/zhurnal', label: 'Журнал' },
   { to: '/upravlenie/narusheniya', label: 'Нарушения' },
   { to: '/upravlenie/kontent', label: 'Контент' },
-  { to: '/upravlenie/finansy', label: 'Финансы' },
   { to: '/upravlenie/analitika', label: 'Аналитика' },
   { to: '/upravlenie/nastroyki', label: 'Настройки' },
 ] as const;
