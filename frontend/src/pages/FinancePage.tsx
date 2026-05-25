@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
+import { cn } from '@/lib/utils';
 
 type Period = 'month' | 'week' | 'halfyear' | 'year';
 
@@ -43,7 +44,13 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: 'year', label: 'Год' },
 ];
 
-const EDITABLE_ROWS = new Set(['revenue', 'expenses', 'salary', 'clients']);
+const EDITABLE_METRICS = new Set(['revenue', 'expenses', 'salary', 'clients']);
+
+function periodRowLabel(period: Period): string {
+  if (period === 'month') return 'День';
+  if (period === 'week') return 'Дата';
+  return 'Месяц';
+}
 
 function fmt(n: number): string {
   if (n === 0) return '—';
@@ -86,12 +93,13 @@ export default function FinancePage() {
   });
 
   const data = tableQ.data;
+  const canEdit = period === 'month' || period === 'week';
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Финансы"
-        description="Выручка, расходы, ЗП и клиентки — таблица по дням, месяцам и году."
+        description="Показатели в столбцах, дни и месяцы — строками. Удобно листать вниз."
         actions={
           <div className="flex flex-wrap gap-1">
             {PERIODS.map((p) => (
@@ -122,53 +130,65 @@ export default function FinancePage() {
       </div>
 
       {tableQ.isLoading ?
-        <Skeleton className="h-[280px]" />
+        <Skeleton className="h-[320px]" />
       : !data ?
         null
-      : <div className="overflow-x-auto rounded-xl border border-stroke dark:border-white/[0.08]">
-          <table className="w-full min-w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-black/[0.03] dark:bg-white/[0.04]">
-                <th className="sticky left-0 z-10 min-w-[13rem] border-b border-stroke bg-[hsl(var(--panel))] px-4 py-3 text-left text-sm font-bold uppercase tracking-wide dark:border-white/[0.08]">
-                  {data.title}
+      : <div className="overflow-y-auto rounded-xl border border-stroke dark:border-white/[0.08]">
+          <table className="w-full border-collapse text-sm">
+            <thead className="sticky top-0 z-20 bg-[hsl(var(--panel))] shadow-[0_1px_0_0_hsl(var(--stroke))] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.08)]">
+              <tr>
+                <th className="w-[5.5rem] border-b border-stroke px-4 py-3 text-left font-bold text-zinc-900 dark:border-white/[0.08] dark:text-white">
+                  {periodRowLabel(period)}
                 </th>
-                {data.columns.map((col) => (
+                {data.rows.map((metric) => (
                   <th
-                    key={col.key}
-                    className="min-w-[4.75rem] border-b border-l border-stroke px-2 py-3 text-center text-sm font-bold tabular-nums dark:border-white/[0.08]"
+                    key={metric.key}
+                    className={cn(
+                      'border-b border-l border-stroke px-3 py-3 text-right font-bold dark:border-white/[0.08]',
+                      metric.key === 'net' && 'text-emerald-800 dark:text-emerald-400',
+                    )}
                   >
-                    {col.label}
+                    <span className="block max-w-[9rem] leading-snug">{metric.label}</span>
                   </th>
                 ))}
-                <th className="min-w-[6.5rem] border-b border-l border-stroke bg-accent/10 px-3 py-3 text-center text-sm font-bold dark:border-white/[0.08]">
-                  ИТОГО
-                </th>
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row) => (
-                <tr key={row.key} className="border-b border-stroke/60 dark:border-white/[0.06]">
-                  <td className="sticky left-0 z-10 border-r border-stroke bg-[hsl(var(--panel))] px-4 py-2.5 text-sm font-semibold text-zinc-800 dark:border-white/[0.08] dark:text-white/90">
-                    {row.label}
+              {data.columns.map((col, rowIdx) => (
+                <tr
+                  key={col.key}
+                  className={cn(
+                    'border-b border-stroke/50 dark:border-white/[0.05]',
+                    rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-black/[0.02] dark:bg-white/[0.02]',
+                  )}
+                >
+                  <td className="sticky left-0 z-10 border-r border-stroke/60 bg-[hsl(var(--panel))] px-4 py-2 font-bold tabular-nums text-zinc-900 dark:border-white/[0.06] dark:text-white">
+                    {col.label}
                   </td>
-                  {row.values.map((val, idx) => {
-                    const col = data.columns[idx]!;
-                    const editable = (period === 'month' || period === 'week') && EDITABLE_ROWS.has(row.key);
+                  {data.rows.map((metric) => {
+                    const val = metric.values[rowIdx] ?? 0;
+                    const editable = canEdit && EDITABLE_METRICS.has(metric.key);
                     return (
-                      <td key={col.key} className="border-l border-stroke/50 px-1 py-1 text-center dark:border-white/[0.06]">
+                      <td
+                        key={`${col.key}-${metric.key}`}
+                        className="border-l border-stroke/40 px-3 py-1.5 text-right dark:border-white/[0.05]"
+                      >
                         {editable ?
                           <input
                             type="number"
-                            className="h-9 w-full min-w-[4.25rem] border-0 bg-transparent text-center text-sm tabular-nums outline-none focus:bg-accent/10 dark:text-white"
+                            className="h-9 w-full min-w-[5rem] max-w-[8rem] ml-auto border-0 bg-transparent text-right text-sm tabular-nums outline-none focus:bg-accent/10 dark:text-white"
                             defaultValue={val || ''}
                             onBlur={(e) => {
                               const n = Math.round(Number(e.target.value) || 0);
-                              const field = row.key === 'clients' ? 'clients' : row.key;
+                              const field = metric.key === 'clients' ? 'clients' : metric.key;
                               if (n !== val) saveMu.mutate({ date: col.date, field, value: n });
                             }}
                           />
                         : <span
-                          className={`inline-block min-w-[4.25rem] py-1 text-sm tabular-nums ${row.key === 'net' ? 'font-semibold text-emerald-700 dark:text-emerald-400' : ''}`}
+                          className={cn(
+                            'inline-block min-w-[5rem] tabular-nums',
+                            metric.key === 'net' && 'font-semibold text-emerald-700 dark:text-emerald-400',
+                          )}
                         >
                           {fmt(val)}
                         </span>
@@ -176,25 +196,23 @@ export default function FinancePage() {
                       </td>
                     );
                   })}
-                  <td className="border-l border-stroke bg-black/[0.02] px-3 py-2.5 text-center text-sm font-bold tabular-nums dark:border-white/[0.08] dark:bg-white/[0.03]">
-                    {fmt(row.total)}
-                  </td>
                 </tr>
               ))}
-              <tr className="bg-accent/5 font-bold dark:bg-accent/10">
-                <td className="sticky left-0 z-10 border-r border-stroke bg-[hsl(var(--panel))] px-4 py-3 text-sm dark:border-white/[0.08]">
-                  Итого по столбцу
+              <tr className="bg-accent/10 font-bold dark:bg-accent/15">
+                <td className="sticky left-0 z-10 border-r border-stroke bg-accent/10 px-4 py-3 dark:border-white/[0.08] dark:bg-accent/15">
+                  ИТОГО
                 </td>
-                {data.columnFooters.map((f) => (
-                  <td key={f.date} className="border-l border-stroke/50 px-2 py-3 text-center text-xs leading-snug dark:border-white/[0.06]">
-                    <div className="text-sm text-emerald-700 dark:text-emerald-400">{fmt(f.net)}</div>
-                    <div className="text-muted dark:text-white/40">{f.clientCount} кл.</div>
+                {data.rows.map((metric) => (
+                  <td
+                    key={`total-${metric.key}`}
+                    className={cn(
+                      'border-l border-stroke/50 px-3 py-3 text-right tabular-nums dark:border-white/[0.06]',
+                      metric.key === 'net' && 'text-emerald-700 dark:text-emerald-400',
+                    )}
+                  >
+                    {fmt(metric.total)}
                   </td>
                 ))}
-                <td className="border-l border-stroke px-3 py-3 text-center dark:border-white/[0.08]">
-                  <div className="text-sm">{fmt(data.grandTotal.net)}</div>
-                  <div className="text-xs font-normal text-muted">{data.grandTotal.clientCount} кл.</div>
-                </td>
               </tr>
             </tbody>
           </table>
@@ -214,6 +232,9 @@ export default function FinancePage() {
           </span>
           <span>
             Чистая: <strong className="text-emerald-700 dark:text-emerald-400">{fmt(data.grandTotal.net)}</strong>
+          </span>
+          <span>
+            Клиентки: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.clientCount)}</strong>
           </span>
         </div>
       : null}
