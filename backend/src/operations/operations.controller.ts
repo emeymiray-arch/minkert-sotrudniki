@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,12 +22,17 @@ import {
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
+import { OperationsFinanceService } from './operations-finance.service';
+import type { FinancePeriod } from './operations-finance.service';
 import { OperationsService } from './operations.service';
 
 @Controller('operations')
 @Roles(UserRole.ADMIN, UserRole.MANAGER)
 export class OperationsController {
-  constructor(private readonly ops: OperationsService) {}
+  constructor(
+    private readonly ops: OperationsService,
+    private readonly finance: OperationsFinanceService,
+  ) {}
 
   @Get('dashboard')
   dashboard(@Query('date') date?: string) {
@@ -348,6 +354,32 @@ export class OperationsController {
   @Get('activity')
   activity(@Query('limit') limit?: string) {
     return this.ops.activityFeed(limit ? Number(limit) : 30);
+  }
+
+  @Get('finance/table')
+  financeTable(
+    @Query('period') period: FinancePeriod,
+    @Query('anchor') anchor?: string,
+  ) {
+    const p = period ?? 'month';
+    if (!['month', 'halfyear', 'year', 'week'].includes(p)) {
+      throw new BadRequestException('period: month | week | halfyear | year');
+    }
+    return this.finance.getTable(p as FinancePeriod, anchor);
+  }
+
+  @Patch('finance/day')
+  financeDay(
+    @Body()
+    body: {
+      date: string;
+      revenue?: number;
+      expenses?: number;
+      salary?: number;
+      clientCount?: number;
+    },
+  ) {
+    return this.finance.upsertDay(body);
   }
 }
 

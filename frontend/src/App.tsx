@@ -15,6 +15,7 @@ import PublicEmployeeTasksPage from '@/pages/PublicEmployeeTasksPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { OpsLayout } from '@/operations/layout/OpsLayout';
 import OpsAnalyticsPage from '@/operations/pages/OpsAnalyticsPage';
+import OpsFinancePage from '@/operations/pages/OpsFinancePage';
 import OpsBlockPage from '@/operations/pages/OpsBlockPage';
 import OpsContentPage from '@/operations/pages/OpsContentPage';
 import OpsSettingsPage from '@/operations/pages/OpsSettingsPage';
@@ -87,6 +88,7 @@ export default function App() {
                 <Route path="zhurnal" element={<OpsJournalPage />} />
                 <Route path="narusheniya" element={<OpsViolationsPage />} />
                 <Route path="kontent" element={<OpsContentPage />} />
+                <Route path="finansy" element={<OpsFinancePage />} />
                 <Route path="analitika" element={<OpsAnalyticsPage />} />
                 <Route path="nastroyki" element={<OpsSettingsPage />} />
               </Route>
