@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
 import { todayIso } from '@/operations/constants';
-import type { OpsBoard, OpsCategory, OpsTask, OpsTaskStatus, OpsTimeBlock } from '@/operations/types';
+import { OpsTaskCheckPanel } from '@/operations/components/OpsTaskCheckPanel';
+import { CHECK_TYPE_LABEL } from '@/operations/check-labels';
+import type { OpsBoard, OpsCategory, OpsTask, OpsTaskCheckType, OpsTaskStatus, OpsTimeBlock } from '@/operations/types';
 import { OPS_STATUS_LABELS } from '@/operations/types';
 
 const COLLAPSE_KEY = 'ops.category.collapsed';
@@ -95,8 +97,16 @@ export function OpsTaskBoard({ block, title, description }: Props) {
   });
 
   const patchTaskMu = useMutation({
-    mutationFn: ({ id, ...body }: { id: string; status?: OpsTaskStatus; title?: string; categoryId?: string | null }) =>
-      apiJson(`/operations/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      status?: OpsTaskStatus;
+      title?: string;
+      categoryId?: string | null;
+      checkType?: OpsTaskCheckType;
+    }) => apiJson(`/operations/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: invalidate,
   });
 
@@ -181,8 +191,10 @@ export function OpsTaskBoard({ block, title, description }: Props) {
                   deleteCategoryMu.mutate(cat.id);
                 }
               }}
+              recordDate={date}
               onPatchTask={(id, body) => patchTaskMu.mutate({ id, ...body })}
               onDeleteTask={(id) => deleteTaskMu.mutate(id)}
+              onJournalSaved={invalidate}
               categories={board.categories}
             />
           ))}
@@ -195,9 +207,11 @@ export function OpsTaskBoard({ block, title, description }: Props) {
                   <TaskRow
                     key={task.id}
                     task={task}
+                    recordDate={date}
                     categories={board.categories}
                     onPatch={(body) => patchTaskMu.mutate({ id: task.id, ...body })}
                     onDelete={() => deleteTaskMu.mutate(task.id)}
+                    onJournalSaved={invalidate}
                   />
                 ))}
               </ul>
@@ -223,12 +237,15 @@ function CategorySection({
   onPin,
   onRename,
   onDelete,
+  recordDate,
   onPatchTask,
   onDeleteTask,
+  onJournalSaved,
 }: {
   category: OpsCategory;
   collapsed: boolean;
   taskDraft: string;
+  recordDate: string;
   categories: OpsCategory[];
   onToggleCollapse: () => void;
   onTaskDraftChange: (v: string) => void;
@@ -239,8 +256,12 @@ function CategorySection({
   onPin: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
-  onPatchTask: (id: string, body: { status?: OpsTaskStatus; title?: string; categoryId?: string | null }) => void;
+  onPatchTask: (
+    id: string,
+    body: { status?: OpsTaskStatus; title?: string; categoryId?: string | null; checkType?: OpsTaskCheckType },
+  ) => void;
   onDeleteTask: (id: string) => void;
+  onJournalSaved: () => void;
 }) {
   const doneCount = category.tasks.filter((t) => t.status === 'DONE').length;
 
@@ -290,9 +311,11 @@ function CategorySection({
                 <TaskRow
                   key={task.id}
                   task={task}
+                  recordDate={recordDate}
                   categories={categories}
                   onPatch={(body) => onPatchTask(task.id, body)}
                   onDelete={() => onDeleteTask(task.id)}
+                  onJournalSaved={onJournalSaved}
                 />
               ))}
             </ul>
@@ -317,76 +340,125 @@ function CategorySection({
 
 function TaskRow({
   task,
+  recordDate,
   categories,
   onPatch,
   onDelete,
+  onJournalSaved,
 }: {
   task: OpsTask;
+  recordDate: string;
   categories: OpsCategory[];
-  onPatch: (body: { status?: OpsTaskStatus; title?: string; categoryId?: string | null }) => void;
+  onPatch: (body: {
+    status?: OpsTaskStatus;
+    title?: string;
+    categoryId?: string | null;
+    checkType?: OpsTaskCheckType;
+  }) => void;
   onDelete: () => void;
+  onJournalSaved: () => void;
 }) {
   const [showStatus, setShowStatus] = React.useState(false);
+  const [showJournal, setShowJournal] = React.useState(false);
   const isDone = task.status === 'DONE';
+  const checkType = task.checkType ?? 'GENERIC';
+  const j = task.checkJournal;
 
   return (
-    <li className="group flex flex-wrap items-start gap-2 rounded-lg py-1.5 pl-1 pr-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
-      <Checkbox
-        checked={isDone}
-        onCheckedChange={(c) => onPatch({ status: c ? 'DONE' : 'PENDING' })}
-        className="mt-0.5 shrink-0"
-      />
-      <div className="min-w-0 flex-1">
-        <input
-          className={`w-full border-0 bg-transparent text-sm outline-none dark:text-white/90 ${
-            isDone ? 'text-muted line-through dark:text-white/40' : ''
-          }`}
-          defaultValue={task.title}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            if (v && v !== task.title) onPatch({ title: v });
-          }}
+    <li className="rounded-lg border border-transparent py-1 hover:border-stroke/60 dark:hover:border-white/[0.06]">
+      <div className="group flex flex-wrap items-start gap-2 py-1.5 pl-1 pr-2">
+        <Checkbox
+          checked={isDone}
+          onCheckedChange={(c) => onPatch({ status: c ? 'DONE' : 'PENDING' })}
+          className="mt-0.5 shrink-0"
         />
-        {showStatus ?
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {(['DONE', 'NOT_DONE', 'PARTIAL', 'OVERDUE', 'NEEDS_ATTENTION'] as OpsTaskStatus[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onPatch({ status: s })}
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  task.status === s ? 'bg-accent/20' : 'bg-black/[0.04] dark:bg-white/[0.06]'
-                }`}
-              >
-                {OPS_STATUS_LABELS[s]}
-              </button>
-            ))}
-          </div>
-        : null}
+        <div className="min-w-0 flex-1">
+          <input
+            className={`w-full border-0 bg-transparent text-sm outline-none dark:text-white/90 ${
+              isDone ? 'text-muted line-through dark:text-white/40' : ''
+            }`}
+            defaultValue={task.title}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== task.title) onPatch({ title: v });
+            }}
+          />
+          {j ?
+            <div className="mt-0.5 text-[10px] text-muted dark:text-white/40">
+              Журнал: {j.recorded}/{j.activeEmployees}
+              {j.issues > 0 ? ` · проблем: ${j.issues}` : ''}
+            </div>
+          : null}
+          {showStatus ?
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {(['DONE', 'NOT_DONE', 'PARTIAL', 'OVERDUE', 'NEEDS_ATTENTION'] as OpsTaskStatus[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onPatch({ status: s })}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    task.status === s ? 'bg-accent/20' : 'bg-black/[0.04] dark:bg-white/[0.06]'
+                  }`}
+                >
+                  {OPS_STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          : null}
+        </div>
+        <select
+          className="max-w-[100px] rounded border border-stroke bg-transparent px-1 py-0.5 text-[10px] dark:border-white/10"
+          value={checkType}
+          onChange={(e) => onPatch({ checkType: e.target.value as OpsTaskCheckType })}
+          title="Тип фиксации"
+        >
+          {(Object.keys(CHECK_TYPE_LABEL) as OpsTaskCheckType[]).map((k) => (
+            <option key={k} value={k}>
+              {CHECK_TYPE_LABEL[k]}
+            </option>
+          ))}
+        </select>
+        <select
+          className="max-w-[120px] rounded border border-stroke bg-transparent px-1 py-0.5 text-[10px] dark:border-white/10"
+          value={task.categoryId ?? ''}
+          onChange={(e) => onPatch({ categoryId: e.target.value || null })}
+          title="Категория"
+        >
+          <option value="">Без категории</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          variant={showJournal ? 'primary' : 'outline'}
+          size="sm"
+          className="h-7 text-[10px]"
+          onClick={() => setShowJournal((v) => !v)}
+        >
+          Фиксация
+        </Button>
+        <button
+          type="button"
+          className="text-[10px] text-muted underline-offset-2 hover:underline dark:text-white/40"
+          onClick={() => setShowStatus((v) => !v)}
+        >
+          {OPS_STATUS_LABELS[task.status]}
+        </button>
+        <button type="button" className="text-rose-500" onClick={onDelete}>
+          <Trash2 className="size-3.5" />
+        </button>
       </div>
-      <select
-        className="max-w-[130px] rounded border border-stroke bg-transparent px-1 py-0.5 text-[10px] opacity-0 transition group-hover:opacity-100 dark:border-white/10"
-        value={task.categoryId ?? ''}
-        onChange={(e) => onPatch({ categoryId: e.target.value || null })}
-        title="Перенести в категорию"
-      >
-        <option value="">Без категории</option>
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.title}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        className="text-[10px] text-muted underline-offset-2 hover:underline dark:text-white/40"
-        onClick={() => setShowStatus((v) => !v)}
-      >
-        {OPS_STATUS_LABELS[task.status]}
-      </button>
-      <button type="button" className="text-rose-500 opacity-0 group-hover:opacity-100" onClick={onDelete}>
-        <Trash2 className="size-3.5" />
-      </button>
+      {showJournal ?
+        <OpsTaskCheckPanel
+          taskId={task.id}
+          recordDate={recordDate}
+          checkType={checkType}
+          onSaved={onJournalSaved}
+        />
+      : null}
     </li>
   );
 }

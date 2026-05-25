@@ -6,9 +6,18 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
-import { OpsTaskStatus, OpsTimeBlock, OpsViolationType, Prisma, UserRole } from '@prisma/client';
+import {
+  OpsAttendanceMark,
+  OpsTaskCheckType,
+  OpsTaskStatus,
+  OpsTimeBlock,
+  OpsViolationType,
+  Prisma,
+  UserRole,
+} from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
@@ -90,6 +99,7 @@ export class OperationsController {
       recurring?: boolean;
       templateKey?: string | null;
       categoryId?: string | null;
+      checkType?: OpsTaskCheckType;
     },
   ) {
     return this.ops.createTask(user, body);
@@ -110,9 +120,54 @@ export class OperationsController {
       block: OpsTimeBlock;
       forDate: string;
       categoryId: string | null;
+      checkType: OpsTaskCheckType;
     }>,
   ) {
     return this.ops.updateTask(user, id, body);
+  }
+
+  @Get('tasks/:id/check-sheet')
+  checkSheet(@Param('id') id: string, @Query('date') date?: string) {
+    return this.ops.getCheckSheet(id, date);
+  }
+
+  @Put('tasks/:id/check-sheet')
+  saveCheckSheet(
+    @CurrentUser() user: JwtUserPayload,
+    @Param('id') id: string,
+    @Query('date') date: string | undefined,
+    @Body()
+    body: {
+      rows: Array<{
+        employeeId: string;
+        attendanceMark?: string | null;
+        checklistOpened?: boolean | null;
+        checklistDone?: boolean | null;
+        checklistIgnored?: boolean | null;
+        reportSubmitted?: boolean | null;
+        reportError?: boolean | null;
+        reportNeedsFix?: boolean | null;
+        comment?: string;
+        extraNote?: string;
+        flagViolation?: boolean;
+      }>;
+    },
+  ) {
+    const rows = (body.rows ?? []).map((r) => ({
+      ...r,
+      attendanceMark: r.attendanceMark as OpsAttendanceMark | null | undefined,
+    }));
+    return this.ops.saveCheckSheet(user, id, date, rows);
+  }
+
+  @Get('check-journal')
+  checkJournal(
+    @Query('employeeId') employeeId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('checkType') checkType?: OpsTaskCheckType,
+  ) {
+    return this.ops.getCheckJournal({ employeeId, from, to, checkType });
   }
 
   @Delete('tasks/:id')

@@ -4,6 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  EmployeeStatus,
+  OpsAttendanceMark,
+  OpsTaskCheckType,
   OpsTaskStatus,
   OpsTimeBlock,
   OpsViolationType,
@@ -13,6 +16,7 @@ import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays, startUtcWeekMonday } from '../common/date/week';
 import { PrismaService } from '../prisma/prisma.service';
 import { OPS_DEFAULT_BLOCKS, OPS_DEFAULT_CATEGORY_TITLES } from './operations.constants';
+import { checkEntryHasIssue, inferCheckTypeFromTitle, violationFromCheckEntry } from './ops-check.util';
 
 function parseDayParam(raw?: string): Date {
   if (!raw?.trim()) {
@@ -150,19 +154,65 @@ export class OperationsService {
       include: this.taskInclude,
     });
 
+    const activeEmployees = await this.prisma.employee.count({
+      where: { status: EmployeeStatus.ACTIVE },
+    });
+    const allTasks = [...categories.flatMap((c) => c.tasks), ...uncategorized];
+    const entries = allTasks.length
+      ? await this.prisma.opsTaskCheckEntry.findMany({
+          where: { taskId: { in: allTasks.map((t) => t.id) }, recordDate: forDate },
+        })
+      : [];
+    const fmt = (t: (typeof allTasks)[number]) =>
+      this.formatTaskForBoard(t, forDate, activeEmployees, entries);
+
     return {
       forDate: isoDate(forDate),
       anchorDate: isoDate(anchor),
       block,
+      activeEmployees,
       categories: categories.map((c) => ({
         id: c.id,
         title: c.title,
         sortOrder: c.sortOrder,
         pinned: c.pinned,
         taskCount: c.tasks.length,
-        tasks: c.tasks,
+        tasks: c.tasks.map(fmt),
       })),
-      uncategorized,
+      uncategorized: uncategorized.map(fmt),
+    };
+  }
+
+  private effectiveCheckType(task: { checkType: OpsTaskCheckType; title: string }): OpsTaskCheckType {
+    return task.checkType === OpsTaskCheckType.NONE ?
+        inferCheckTypeFromTitle(task.title)
+      : task.checkType;
+  }
+
+  private formatTaskForBoard(
+    task: {
+      id: string;
+      checkType: OpsTaskCheckType;
+      title: string;
+      [key: string]: unknown;
+    },
+    recordDate: Date,
+    activeEmployees: number,
+    entries: Array<{ taskId: string } & Record<string, unknown>>,
+  ) {
+    const checkType = this.effectiveCheckType(task);
+    const taskEntries = entries.filter((e) => e.taskId === task.id);
+    return {
+      ...task,
+      checkType,
+      checkJournal: {
+        recordDate: isoDate(recordDate),
+        activeEmployees,
+        recorded: taskEntries.length,
+        issues: taskEntries.filter((e) =>
+          checkEntryHasIssue(e as never, checkType),
+        ).length,
+      },
     };
   }
 
@@ -248,9 +298,11 @@ export class OperationsService {
       recurring?: boolean;
       templateKey?: string | null;
       categoryId?: string | null;
+      checkType?: OpsTaskCheckType;
     },
   ) {
     const forDate = parseDayParam(body.forDate);
+    const checkType = body.checkType ?? inferCheckTypeFromTitle(body.title);
     const taskWhere = body.categoryId
       ? { categoryId: body.categoryId }
       : this.taskWhereForBlock(body.block, forDate);
@@ -270,6 +322,7 @@ export class OperationsService {
         pinned: body.pinned ?? false,
         recurring: body.recurring ?? false,
         templateKey: body.templateKey ?? null,
+        checkType,
         sortOrder: (max._max.sortOrder ?? -1) + 1,
       },
       include: { assignee: { select: { id: true, name: true } } },
@@ -291,12 +344,17 @@ export class OperationsService {
       block: OpsTimeBlock;
       forDate: string;
       categoryId: string | null;
+      checkType: OpsTaskCheckType;
     }>,
   ) {
     const prev = await this.prisma.opsTask.findUnique({ where: { id } });
     if (!prev) throw new NotFoundException('Задача не найдена');
     const data: Prisma.OpsTaskUpdateInput = {};
     if (body.title !== undefined) data.title = body.title.trim();
+    if (body.checkType !== undefined) data.checkType = body.checkType;
+    else if (body.title !== undefined && prev.checkType === OpsTaskCheckType.NONE) {
+      data.checkType = inferCheckTypeFromTitle(body.title);
+    }
     if (body.description !== undefined) data.description = body.description.trim();
     if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null;
     if (body.assigneeId !== undefined) {
@@ -726,5 +784,175 @@ export class OperationsService {
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 100),
     });
+  }
+
+  async getCheckSheet(taskId: string, dateRaw?: string) {
+    const task = await this.prisma.opsTask.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundException('Задача не найдена');
+    const recordDate = parseDayParam(dateRaw ?? isoDate(task.forDate));
+    const checkType = this.effectiveCheckType(task);
+    const employees = await this.prisma.employee.findMany({
+      where: { status: EmployeeStatus.ACTIVE },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, position: true },
+    });
+    const entries = await this.prisma.opsTaskCheckEntry.findMany({
+      where: { taskId, recordDate },
+    });
+    const byEmp = new Map(entries.map((e) => [e.employeeId, e]));
+    return {
+      task: {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        checkType,
+        forDate: isoDate(task.forDate),
+      },
+      recordDate: isoDate(recordDate),
+      rows: employees.map((emp) => ({
+        employee: emp,
+        entry: byEmp.get(emp.id) ?? null,
+      })),
+    };
+  }
+
+  async saveCheckSheet(
+    user: JwtUserPayload | undefined,
+    taskId: string,
+    dateRaw: string | undefined,
+    rows: Array<{
+      employeeId: string;
+      attendanceMark?: OpsAttendanceMark | null;
+      checklistOpened?: boolean | null;
+      checklistDone?: boolean | null;
+      checklistIgnored?: boolean | null;
+      reportSubmitted?: boolean | null;
+      reportError?: boolean | null;
+      reportNeedsFix?: boolean | null;
+      comment?: string;
+      extraNote?: string;
+      flagViolation?: boolean;
+    }>,
+  ) {
+    const task = await this.prisma.opsTask.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundException('Задача не найдена');
+    const recordDate = parseDayParam(dateRaw ?? isoDate(task.forDate));
+    const checkType = this.effectiveCheckType(task);
+    const recorder = user?.email ?? 'Контроль';
+
+    for (const row of rows) {
+      const hasData =
+        row.attendanceMark != null ||
+        row.checklistOpened != null ||
+        row.checklistDone != null ||
+        row.checklistIgnored != null ||
+        row.reportSubmitted != null ||
+        row.reportError != null ||
+        row.reportNeedsFix != null ||
+        (row.comment?.trim()?.length ?? 0) > 0 ||
+        (row.extraNote?.trim()?.length ?? 0) > 0;
+
+      if (!hasData) {
+        await this.prisma.opsTaskCheckEntry.deleteMany({
+          where: { taskId, employeeId: row.employeeId, recordDate },
+        });
+        continue;
+      }
+
+      const entry = await this.prisma.opsTaskCheckEntry.upsert({
+        where: {
+          taskId_employeeId_recordDate: {
+            taskId,
+            employeeId: row.employeeId,
+            recordDate,
+          },
+        },
+        create: {
+          taskId,
+          employeeId: row.employeeId,
+          recordDate,
+          attendanceMark: row.attendanceMark ?? null,
+          checklistOpened: row.checklistOpened ?? null,
+          checklistDone: row.checklistDone ?? null,
+          checklistIgnored: row.checklistIgnored ?? null,
+          reportSubmitted: row.reportSubmitted ?? null,
+          reportError: row.reportError ?? null,
+          reportNeedsFix: row.reportNeedsFix ?? null,
+          comment: row.comment?.trim() ?? '',
+          extraNote: row.extraNote?.trim() ?? '',
+          flagViolation: row.flagViolation ?? false,
+          recordedByName: recorder,
+        },
+        update: {
+          attendanceMark: row.attendanceMark ?? null,
+          checklistOpened: row.checklistOpened ?? null,
+          checklistDone: row.checklistDone ?? null,
+          checklistIgnored: row.checklistIgnored ?? null,
+          reportSubmitted: row.reportSubmitted ?? null,
+          reportError: row.reportError ?? null,
+          reportNeedsFix: row.reportNeedsFix ?? null,
+          comment: row.comment?.trim() ?? '',
+          extraNote: row.extraNote?.trim() ?? '',
+          flagViolation: row.flagViolation ?? false,
+          recordedByName: recorder,
+        },
+      });
+
+      if (row.flagViolation) {
+        const v = violationFromCheckEntry(entry, checkType);
+        if (v) {
+          await this.prisma.opsViolation.create({
+            data: {
+              employeeId: row.employeeId,
+              type: v.type,
+              description: v.description,
+              occurredAt: new Date(),
+              warned: row.flagViolation ?? false,
+            },
+          });
+        }
+      }
+    }
+
+    await this.log(user, 'task', taskId, 'check_sheet_save', { recordDate: isoDate(recordDate), rows: rows.length });
+    return this.getCheckSheet(taskId, isoDate(recordDate));
+  }
+
+  async getCheckJournal(opts: {
+    employeeId?: string;
+    from?: string;
+    to?: string;
+    checkType?: OpsTaskCheckType;
+  }) {
+    const to = parseDayParam(opts.to);
+    const from = opts.from ? parseDayParam(opts.from) : new Date(to.getTime() - 30 * 86400000);
+    const where: Prisma.OpsTaskCheckEntryWhereInput = {
+      recordDate: { gte: from, lte: to },
+    };
+    if (opts.employeeId) where.employeeId = opts.employeeId;
+
+    const entries = await this.prisma.opsTaskCheckEntry.findMany({
+      where,
+      orderBy: [{ recordDate: 'desc' }, { updatedAt: 'desc' }],
+      include: {
+        employee: { select: { id: true, name: true, position: true } },
+        task: { select: { id: true, title: true, block: true, checkType: true } },
+      },
+    });
+
+    const filtered =
+      opts.checkType ?
+        entries.filter((e) => this.effectiveCheckType(e.task) === opts.checkType)
+      : entries;
+
+    return {
+      from: isoDate(from),
+      to: isoDate(to),
+      items: filtered.map((e) => ({
+        ...e,
+        effectiveCheckType: this.effectiveCheckType(e.task),
+        hasIssue: checkEntryHasIssue(e, this.effectiveCheckType(e.task)),
+      })),
+    };
   }
 }

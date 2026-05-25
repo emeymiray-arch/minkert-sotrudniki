@@ -8,6 +8,7 @@ export const OPS_NAV = [
   { to: '/upravlenie/sleduyushchiy-den', label: 'След. день', block: 'NEXT_DAY' as OpsTimeBlock },
   { to: '/upravlenie/nedelya', label: 'Неделя', block: 'WEEK' as OpsTimeBlock },
   { to: '/upravlenie/sotrudniki', label: 'Сотрудники' },
+  { to: '/upravlenie/zhurnal', label: 'Журнал' },
   { to: '/upravlenie/narusheniya', label: 'Нарушения' },
   { to: '/upravlenie/kontent', label: 'Контент' },
   { to: '/upravlenie/analitika', label: 'Аналитика' },

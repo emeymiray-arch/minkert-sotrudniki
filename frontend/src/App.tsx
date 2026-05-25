@@ -21,6 +21,7 @@ import OpsDashboardPage from '@/operations/pages/OpsDashboardPage';
 import OpsSettingsPage from '@/operations/pages/OpsSettingsPage';
 import OpsStaffDetailPage from '@/operations/pages/OpsStaffDetailPage';
 import OpsStaffPage from '@/operations/pages/OpsStaffPage';
+import OpsJournalPage from '@/operations/pages/OpsJournalPage';
 import OpsViolationsPage from '@/operations/pages/OpsViolationsPage';
 
 const queryClient = new QueryClient({
@@ -84,6 +85,7 @@ export default function App() {
                 <Route path="nedelya" element={<OpsBlockPage />} />
                 <Route path="sotrudniki" element={<OpsStaffPage />} />
                 <Route path="sotrudniki/:id" element={<OpsStaffDetailPage />} />
+                <Route path="zhurnal" element={<OpsJournalPage />} />
                 <Route path="narusheniya" element={<OpsViolationsPage />} />
                 <Route path="kontent" element={<OpsContentPage />} />
                 <Route path="analitika" element={<OpsAnalyticsPage />} />

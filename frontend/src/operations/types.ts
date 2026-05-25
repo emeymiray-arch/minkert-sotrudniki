@@ -44,10 +44,48 @@ export type OpsBoard = {
   uncategorized: OpsTask[];
 };
 
+export type OpsTaskCheckType = 'NONE' | 'ATTENDANCE' | 'CHECKLIST' | 'REPORT' | 'GENERIC';
+
+export type OpsAttendanceMark = 'PRESENT' | 'LATE' | 'ABSENT' | 'WARNED';
+
+export type OpsCheckJournalMeta = {
+  recordDate: string;
+  activeEmployees: number;
+  recorded: number;
+  issues: number;
+};
+
+export type OpsTaskCheckEntry = {
+  id: string;
+  employeeId: string;
+  recordDate: string;
+  attendanceMark?: OpsAttendanceMark | null;
+  checklistOpened?: boolean | null;
+  checklistDone?: boolean | null;
+  checklistIgnored?: boolean | null;
+  reportSubmitted?: boolean | null;
+  reportError?: boolean | null;
+  reportNeedsFix?: boolean | null;
+  comment: string;
+  extraNote: string;
+  flagViolation: boolean;
+};
+
+export type OpsCheckSheet = {
+  task: { id: string; title: string; status: OpsTaskStatus; checkType: OpsTaskCheckType; forDate: string };
+  recordDate: string;
+  rows: Array<{
+    employee: { id: string; name: string; position: string };
+    entry: OpsTaskCheckEntry | null;
+  }>;
+};
+
 export type OpsTask = {
   id: string;
   block: OpsTimeBlock;
   categoryId?: string | null;
+  checkType?: OpsTaskCheckType;
+  checkJournal?: OpsCheckJournalMeta;
   title: string;
   description: string;
   sortOrder: number;

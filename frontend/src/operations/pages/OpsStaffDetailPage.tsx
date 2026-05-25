@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,12 @@ export default function OpsStaffDetailPage() {
       <Card>
         <CardHeader title={data.employee.name} description={data.employee.position} />
         <div className="flex flex-wrap gap-4 text-sm">
+          <Link
+            to={`/upravlenie/zhurnal?employeeId=${data.employee.id}`}
+            className="text-accent underline-offset-2 hover:underline"
+          >
+            История фиксаций →
+          </Link>
           <span>
             Задач сегодня: <strong>{data.todayTasks.done}</strong> / {data.todayTasks.total}
           </span>
