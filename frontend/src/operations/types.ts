@@ -38,10 +38,8 @@ export type OpsCategory = {
 
 export type OpsBoard = {
   forDate: string;
-  anchorDate: string;
   block: OpsTimeBlock;
-  categories: OpsCategory[];
-  uncategorized: OpsTask[];
+  tasks: OpsTask[];
 };
 
 export type OpsTaskCheckType = 'NONE' | 'ATTENDANCE' | 'CHECKLIST' | 'REPORT' | 'GENERIC';
@@ -84,6 +82,7 @@ export type OpsTask = {
   id: string;
   block: OpsTimeBlock;
   categoryId?: string | null;
+  categoryLabel?: string;
   checkType?: OpsTaskCheckType;
   checkJournal?: OpsCheckJournalMeta;
   title: string;

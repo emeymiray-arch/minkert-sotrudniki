@@ -131,55 +131,40 @@ export class OperationsService {
   async getBoard(block: OpsTimeBlock, dateRaw?: string) {
     await this.ensureDefaults();
     const forDate = parseDayParam(dateRaw);
-    const anchor = this.categoryAnchorDate(block, forDate);
     await this.applyOverdue(forDate);
-    await this.ensureCategoriesForBoard(block, anchor);
 
     const taskWhere = this.taskWhereForBlock(block, forDate);
-    const categories = await this.prisma.opsCategory.findMany({
-      where: { block, forDate: anchor },
-      orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }],
+    const rawTasks = await this.prisma.opsTask.findMany({
+      where: taskWhere,
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
-        tasks: {
-          where: taskWhere,
-          orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-          include: this.taskInclude,
-        },
+        ...this.taskInclude,
+        category: { select: { title: true } },
       },
-    });
-
-    const uncategorized = await this.prisma.opsTask.findMany({
-      where: { ...taskWhere, categoryId: null },
-      orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: this.taskInclude,
     });
 
     const activeEmployees = await this.prisma.employee.count({
       where: { status: EmployeeStatus.ACTIVE },
     });
-    const allTasks = [...categories.flatMap((c) => c.tasks), ...uncategorized];
-    const entries = allTasks.length
+    const entries = rawTasks.length
       ? await this.prisma.opsTaskCheckEntry.findMany({
-          where: { taskId: { in: allTasks.map((t) => t.id) }, recordDate: forDate },
+          where: { taskId: { in: rawTasks.map((t) => t.id) }, recordDate: forDate },
         })
       : [];
-    const fmt = (t: (typeof allTasks)[number]) =>
-      this.formatTaskForBoard(t, forDate, activeEmployees, entries);
+
+    const tasks = [...rawTasks]
+      .sort((a, b) => {
+        const la = a.categoryLabel?.trim() || a.category?.title?.trim() || 'яяя';
+        const lb = b.categoryLabel?.trim() || b.category?.title?.trim() || 'яяя';
+        if (la !== lb) return la.localeCompare(lb, 'ru');
+        return a.sortOrder - b.sortOrder;
+      })
+      .map((t) => this.formatTaskForBoard(t, forDate, activeEmployees, entries));
 
     return {
       forDate: isoDate(forDate),
-      anchorDate: isoDate(anchor),
       block,
-      activeEmployees,
-      categories: categories.map((c) => ({
-        id: c.id,
-        title: c.title,
-        sortOrder: c.sortOrder,
-        pinned: c.pinned,
-        taskCount: c.tasks.length,
-        tasks: c.tasks.map(fmt),
-      })),
-      uncategorized: uncategorized.map(fmt),
+      tasks,
     };
   }
 
@@ -194,6 +179,8 @@ export class OperationsService {
       id: string;
       checkType: OpsTaskCheckType;
       title: string;
+      categoryLabel?: string;
+      category?: { title: string } | null;
       [key: string]: unknown;
     },
     recordDate: Date,
@@ -202,8 +189,10 @@ export class OperationsService {
   ) {
     const checkType = this.effectiveCheckType(task);
     const taskEntries = entries.filter((e) => e.taskId === task.id);
+    const categoryLabel = task.categoryLabel?.trim() || task.category?.title?.trim() || '';
     return {
       ...task,
+      categoryLabel,
       checkType,
       checkJournal: {
         recordDate: isoDate(recordDate),
@@ -298,6 +287,7 @@ export class OperationsService {
       recurring?: boolean;
       templateKey?: string | null;
       categoryId?: string | null;
+      categoryLabel?: string;
       checkType?: OpsTaskCheckType;
     },
   ) {
@@ -314,6 +304,7 @@ export class OperationsService {
       data: {
         block: body.block,
         categoryId: body.categoryId || null,
+        categoryLabel: body.categoryLabel?.trim() ?? '',
         title: body.title.trim(),
         description: body.description?.trim() ?? '',
         forDate,
@@ -344,6 +335,7 @@ export class OperationsService {
       block: OpsTimeBlock;
       forDate: string;
       categoryId: string | null;
+      categoryLabel: string;
       checkType: OpsTaskCheckType;
     }>,
   ) {
@@ -366,6 +358,7 @@ export class OperationsService {
     if (body.categoryId !== undefined) {
       data.category = body.categoryId ? { connect: { id: body.categoryId } } : { disconnect: true };
     }
+    if (body.categoryLabel !== undefined) data.categoryLabel = body.categoryLabel.trim();
     if (body.status !== undefined) {
       data.status = body.status;
       data.markedAt = new Date();

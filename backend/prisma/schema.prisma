@@ -154,6 +154,8 @@ model OpsTask {
   block        OpsTimeBlock
   categoryId   String?
   category     OpsCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /** Метка для сортировки (без отдельных визуальных секций). */
+  categoryLabel String       @default("")
   title        String
   description  String        @default("")
   sortOrder    Int           @default(0)

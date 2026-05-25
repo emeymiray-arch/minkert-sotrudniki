@@ -15,5 +15,5 @@ export default function OpsBlockPage() {
   const { pathname } = useLocation();
   const slug = pathname.split('/').filter(Boolean).pop() ?? 'utro';
   const cfg = BLOCK_BY_SLUG[slug] ?? BLOCK_BY_SLUG.utro!;
-  return <OpsTaskBoard block={cfg.block} title={cfg.title} description={cfg.desc} />;
+  return <OpsTaskBoard block={cfg.block} title={cfg.title} />;
 }

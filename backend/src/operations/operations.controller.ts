@@ -99,6 +99,7 @@ export class OperationsController {
       recurring?: boolean;
       templateKey?: string | null;
       categoryId?: string | null;
+      categoryLabel?: string;
       checkType?: OpsTaskCheckType;
     },
   ) {
@@ -120,6 +121,7 @@ export class OperationsController {
       block: OpsTimeBlock;
       forDate: string;
       categoryId: string | null;
+      categoryLabel: string;
       checkType: OpsTaskCheckType;
     }>,
   ) {

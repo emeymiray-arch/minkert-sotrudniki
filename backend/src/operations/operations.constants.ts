@@ -20,7 +20,17 @@ export const OPS_DEFAULT_BLOCKS: Array<{
   { block: OpsTimeBlock.WEEK, title: 'Неделя', timeStart: '00:00', timeEnd: '23:59', sortOrder: 4 },
 ];
 
-/** Стартовые категории при первом открытии блока за день. */
+/** Метки категории у задачи (только сортировка, без UI-секций). */
+export const OPS_SORT_CATEGORY_LABELS = [
+  'Дисциплина сотрудников',
+  'Проверка отчётов',
+  'Контент',
+  'Аналитика',
+  'Сотрудники',
+  'Расходники',
+] as const;
+
+/** Стартовые категории при первом открытии блока за день (legacy). */
 export const OPS_DEFAULT_CATEGORY_TITLES = [
   'Дисциплина сотрудников',
   'Проверка отчётов',

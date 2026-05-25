@@ -31,7 +31,7 @@ export function OpsLayout() {
           <NavLink
             key={item.to}
             to={item.to}
-            end={'end' in item ? item.end : false}
+            end={false}
             className={({ isActive }) =>
               cn(
                 'shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold transition',

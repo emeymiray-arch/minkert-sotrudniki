@@ -1,7 +1,18 @@
 import type { OpsTimeBlock } from '@/operations/types';
 
+export const OPS_SORT_CATEGORIES = [
+  'Дисциплина сотрудников',
+  'Проверка отчётов',
+  'Контент',
+  'Аналитика',
+  'Сотрудники',
+  'Расходники',
+] as const;
+
+/** Порядок типов фиксации в выпадающем списке. */
+export const OPS_CHECK_TYPE_ORDER = ['ATTENDANCE', 'NONE', 'CHECKLIST', 'REPORT', 'GENERIC'] as const;
+
 export const OPS_NAV = [
-  { to: '/upravlenie', label: 'Дашборд', end: true },
   { to: '/upravlenie/utro', label: 'Утро', block: 'MORNING' as OpsTimeBlock },
   { to: '/upravlenie/den', label: 'День', block: 'DAY' as OpsTimeBlock },
   { to: '/upravlenie/vecher', label: 'Вечер', block: 'EVENING' as OpsTimeBlock },

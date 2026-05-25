@@ -17,7 +17,6 @@ import { OpsLayout } from '@/operations/layout/OpsLayout';
 import OpsAnalyticsPage from '@/operations/pages/OpsAnalyticsPage';
 import OpsBlockPage from '@/operations/pages/OpsBlockPage';
 import OpsContentPage from '@/operations/pages/OpsContentPage';
-import OpsDashboardPage from '@/operations/pages/OpsDashboardPage';
 import OpsSettingsPage from '@/operations/pages/OpsSettingsPage';
 import OpsStaffDetailPage from '@/operations/pages/OpsStaffDetailPage';
 import OpsStaffPage from '@/operations/pages/OpsStaffPage';
@@ -77,7 +76,7 @@ export default function App() {
               <Route path="/settings" element={<SettingsPage />} />
 
               <Route path="/upravlenie" element={<OpsLayout />}>
-                <Route index element={<OpsDashboardPage />} />
+                <Route index element={<Navigate to="/upravlenie/utro" replace />} />
                 <Route path="utro" element={<OpsBlockPage />} />
                 <Route path="den" element={<OpsBlockPage />} />
                 <Route path="vecher" element={<OpsBlockPage />} />
