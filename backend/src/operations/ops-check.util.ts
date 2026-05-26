@@ -17,7 +17,23 @@ type EntryLike = {
   reportSubmitted?: boolean | null;
   reportError?: boolean | null;
   reportNeedsFix?: boolean | null;
+  comment?: string | null;
+  extraNote?: string | null;
 };
+
+export function checkEntryHasStoredData(entry: EntryLike): boolean {
+  return (
+    entry.attendanceMark != null ||
+    entry.checklistOpened != null ||
+    entry.checklistDone != null ||
+    entry.checklistIgnored != null ||
+    entry.reportSubmitted != null ||
+    entry.reportError != null ||
+    entry.reportNeedsFix != null ||
+    (entry.comment?.trim()?.length ?? 0) > 0 ||
+    (entry.extraNote?.trim()?.length ?? 0) > 0
+  );
+}
 
 export function checkEntryHasIssue(entry: EntryLike, checkType: OpsTaskCheckType): boolean {
   switch (checkType) {

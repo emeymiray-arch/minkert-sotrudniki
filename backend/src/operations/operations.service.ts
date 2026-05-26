@@ -20,7 +20,12 @@ import {
   OPS_DEFAULT_CATEGORY_TITLES,
   OPS_PERSISTENT_TASK_DATE_ISO,
 } from './operations.constants';
-import { checkEntryHasIssue, inferCheckTypeFromTitle, violationFromCheckEntry } from './ops-check.util';
+import {
+  checkEntryHasIssue,
+  checkEntryHasStoredData,
+  inferCheckTypeFromTitle,
+  violationFromCheckEntry,
+} from './ops-check.util';
 
 function parseDayParam(raw?: string): Date {
   if (!raw?.trim()) {
@@ -199,6 +204,137 @@ export class OperationsService {
       forDate: isoDate(forDate),
       block,
       tasks,
+    };
+  }
+
+  /** Копирует журнал фиксации с одной даты на другую (например сегодня → завтра). */
+  async carryForwardBoard(
+    user: JwtUserPayload | undefined,
+    block: OpsTimeBlock,
+    fromDateRaw?: string,
+    toDateRaw?: string,
+    opts?: { resetTaskStatus?: boolean; onlyIncomplete?: boolean },
+  ) {
+    if (block === OpsTimeBlock.WEEK) {
+      throw new BadRequestException('Для блока «Неделя» перенос на завтра недоступен');
+    }
+    const fromDate = parseDayParam(fromDateRaw);
+    const toDate = toDateRaw ? parseDayParam(toDateRaw) : addUtcDays(fromDate, 1);
+    if (toDate.getTime() <= fromDate.getTime()) {
+      throw new BadRequestException('Дата «куда» должна быть позже даты «откуда»');
+    }
+
+    await this.migrateBlockToPersistentTasks(block);
+    const taskWhere: Prisma.OpsTaskWhereInput = { block, recurring: true };
+    if (opts?.onlyIncomplete) {
+      taskWhere.status = { not: OpsTaskStatus.DONE };
+    }
+    const tasks = await this.prisma.opsTask.findMany({
+      where: taskWhere,
+      select: { id: true },
+    });
+    const taskIds = tasks.map((t) => t.id);
+    if (taskIds.length === 0) {
+      return {
+        fromDate: isoDate(fromDate),
+        toDate: isoDate(toDate),
+        block,
+        copied: 0,
+        skipped: 0,
+        tasksReset: 0,
+      };
+    }
+
+    const sourceEntries = await this.prisma.opsTaskCheckEntry.findMany({
+      where: { taskId: { in: taskIds }, recordDate: fromDate },
+    });
+
+    let copied = 0;
+    let skipped = 0;
+    const recorder = user?.email ?? 'Контроль';
+
+    for (const src of sourceEntries) {
+      if (!checkEntryHasStoredData(src)) continue;
+
+      const existing = await this.prisma.opsTaskCheckEntry.findUnique({
+        where: {
+          taskId_employeeId_recordDate: {
+            taskId: src.taskId,
+            employeeId: src.employeeId,
+            recordDate: toDate,
+          },
+        },
+      });
+      if (existing && checkEntryHasStoredData(existing)) {
+        skipped += 1;
+        continue;
+      }
+
+      await this.prisma.opsTaskCheckEntry.upsert({
+        where: {
+          taskId_employeeId_recordDate: {
+            taskId: src.taskId,
+            employeeId: src.employeeId,
+            recordDate: toDate,
+          },
+        },
+        create: {
+          taskId: src.taskId,
+          employeeId: src.employeeId,
+          recordDate: toDate,
+          attendanceMark: src.attendanceMark,
+          checklistOpened: src.checklistOpened,
+          checklistDone: src.checklistDone,
+          checklistIgnored: src.checklistIgnored,
+          reportSubmitted: src.reportSubmitted,
+          reportError: src.reportError,
+          reportNeedsFix: src.reportNeedsFix,
+          comment: src.comment,
+          extraNote: src.extraNote,
+          flagViolation: false,
+          recordedByName: recorder,
+        },
+        update: {
+          attendanceMark: src.attendanceMark,
+          checklistOpened: src.checklistOpened,
+          checklistDone: src.checklistDone,
+          checklistIgnored: src.checklistIgnored,
+          reportSubmitted: src.reportSubmitted,
+          reportError: src.reportError,
+          reportNeedsFix: src.reportNeedsFix,
+          comment: src.comment,
+          extraNote: src.extraNote,
+          flagViolation: false,
+          recordedByName: recorder,
+        },
+      });
+      copied += 1;
+    }
+
+    let tasksReset = 0;
+    if (opts?.resetTaskStatus !== false) {
+      const reset = await this.prisma.opsTask.updateMany({
+        where: { id: { in: taskIds } },
+        data: { status: OpsTaskStatus.PENDING, markedAt: null, markedByName: '' },
+      });
+      tasksReset = reset.count;
+    }
+
+    await this.log(user, 'board', block, 'carry_forward', {
+      fromDate: isoDate(fromDate),
+      toDate: isoDate(toDate),
+      copied,
+      skipped,
+      tasksReset,
+    });
+
+    return {
+      fromDate: isoDate(fromDate),
+      toDate: isoDate(toDate),
+      block,
+      copied,
+      skipped,
+      tasksReset,
     };
   }
 

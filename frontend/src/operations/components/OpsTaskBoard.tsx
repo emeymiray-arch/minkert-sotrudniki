@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
-import { OPS_CHECK_TYPE_ORDER, OPS_SORT_CATEGORIES, todayIso } from '@/operations/constants';
+import { addDaysIso, OPS_CHECK_TYPE_ORDER, OPS_SORT_CATEGORIES, todayIso } from '@/operations/constants';
 import { OpsTaskCheckPanel } from '@/operations/components/OpsTaskCheckPanel';
 import { CHECK_TYPE_LABEL } from '@/operations/check-labels';
 import type { OpsBoard, OpsTask, OpsTaskCheckType, OpsTaskStatus, OpsTimeBlock } from '@/operations/types';
@@ -71,22 +72,64 @@ export function OpsTaskBoard({ block, title }: Props) {
     onSuccess: invalidate,
   });
 
+  const carryForwardMu = useMutation({
+    mutationFn: () => {
+      const toDate = addDaysIso(date, 1);
+      return apiJson<{
+        copied: number;
+        skipped: number;
+        toDate: string;
+      }>('/operations/board/carry-forward', {
+        method: 'POST',
+        body: JSON.stringify({ block, fromDate: date, toDate }),
+      });
+    },
+    onSuccess: (res) => {
+      setDate(res.toDate);
+      void qc.invalidateQueries({ queryKey: ['ops', 'board', block, res.toDate] });
+      void qc.invalidateQueries({ queryKey: ['ops', 'dashboard'] });
+      toast.success(
+        res.copied > 0 ?
+          `Перенесено записей: ${res.copied}. Открыта дата ${res.toDate}`
+        : 'На завтра уже есть данные — ничего не перезаписано',
+      );
+    },
+    onError: () => toast.error('Не удалось перенести на завтра'),
+  });
+
   const tasks = boardQ.data?.tasks ?? [];
+  const canCarryForward = block !== 'WEEK';
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{title}</h2>
-        <div className="flex flex-col items-end gap-0.5">
-          <label className="text-[10px] font-medium uppercase tracking-wide text-muted dark:text-white/40">
-            Дата фиксации
-          </label>
-          <Input type="date" className="w-[160px]" value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex flex-wrap items-end justify-end gap-2">
+          {canCarryForward ?
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={carryForwardMu.isPending}
+              onClick={() => carryForwardMu.mutate()}
+            >
+              <ArrowRight className="size-4" />
+              {carryForwardMu.isPending ? 'Перенос…' : 'На завтра'}
+            </Button>
+          : null}
+          <div className="flex flex-col items-end gap-0.5">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted dark:text-white/40">
+              Дата фиксации
+            </label>
+            <Input type="date" className="w-[160px]" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
         </div>
       </div>
 
       <p className="text-xs text-muted dark:text-white/45">
-        Список задач сохраняется — на следующий день он не очищается. Дата справа влияет только на журнал фиксации.
+        Список задач сохраняется каждый день. «На завтра» копирует заполненную фиксацию на следующую дату и сбрасывает
+        галочки «сделано».
       </p>
 
       <div className="flex gap-2">

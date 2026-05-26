@@ -58,6 +58,25 @@ export class OperationsController {
     return this.ops.getBoard(block, date);
   }
 
+  @Post('board/carry-forward')
+  carryForward(
+    @CurrentUser() user: JwtUserPayload,
+    @Body()
+    body: {
+      block: OpsTimeBlock;
+      fromDate?: string;
+      toDate?: string;
+      resetTaskStatus?: boolean;
+      onlyIncomplete?: boolean;
+    },
+  ) {
+    if (!body?.block) throw new BadRequestException('block обязателен');
+    return this.ops.carryForwardBoard(user, body.block, body.fromDate, body.toDate, {
+      resetTaskStatus: body.resetTaskStatus,
+      onlyIncomplete: body.onlyIncomplete,
+    });
+  }
+
   @Get('tasks')
   listTasks(@Query('block') block: OpsTimeBlock, @Query('date') date?: string) {
     return this.ops.listTasks(block, date);
