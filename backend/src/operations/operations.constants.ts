@@ -40,6 +40,9 @@ export const OPS_DEFAULT_CATEGORY_TITLES = [
   'Расходники',
 ] as const;
 
+/** Дата в БД для постоянных ежедневных задач (список не «обнуляется» каждый день). */
+export const OPS_PERSISTENT_TASK_DATE_ISO = '1970-01-01';
+
 export const OPS_STATUS_LABEL: Record<string, string> = {
   PENDING: 'Ожидает',
   DONE: 'Сделано',

@@ -15,7 +15,11 @@ import {
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays, startUtcWeekMonday } from '../common/date/week';
 import { PrismaService } from '../prisma/prisma.service';
-import { OPS_DEFAULT_BLOCKS, OPS_DEFAULT_CATEGORY_TITLES } from './operations.constants';
+import {
+  OPS_DEFAULT_BLOCKS,
+  OPS_DEFAULT_CATEGORY_TITLES,
+  OPS_PERSISTENT_TASK_DATE_ISO,
+} from './operations.constants';
 import { checkEntryHasIssue, inferCheckTypeFromTitle, violationFromCheckEntry } from './ops-check.util';
 
 function parseDayParam(raw?: string): Date {
@@ -83,8 +87,16 @@ export class OperationsService {
     return row;
   }
 
+  private persistentTaskDate(): Date {
+    return parseDayParam(OPS_PERSISTENT_TASK_DATE_ISO);
+  }
+
+  private isPersistentDailyBlock(block: OpsTimeBlock): boolean {
+    return block !== OpsTimeBlock.WEEK;
+  }
+
   private categoryAnchorDate(block: OpsTimeBlock, forDate: Date): Date {
-    return block === OpsTimeBlock.WEEK ? startUtcWeekMonday(forDate) : forDate;
+    return block === OpsTimeBlock.WEEK ? startUtcWeekMonday(forDate) : this.persistentTaskDate();
   }
 
   private taskWhereForBlock(block: OpsTimeBlock, forDate: Date): Prisma.OpsTaskWhereInput {
@@ -92,7 +104,29 @@ export class OperationsService {
       const mon = startUtcWeekMonday(forDate);
       return { block, forDate: { gte: mon, lte: addUtcDays(mon, 6) } };
     }
-    return { block, forDate };
+    return { block, recurring: true };
+  }
+
+  /** Старые задачи «на один день» → постоянный список блока (один раз). */
+  private async migrateBlockToPersistentTasks(block: OpsTimeBlock) {
+    if (!this.isPersistentDailyBlock(block)) return;
+    const recurringCount = await this.prisma.opsTask.count({
+      where: { block, recurring: true },
+    });
+    if (recurringCount > 0) return;
+
+    const latest = await this.prisma.opsTask.findFirst({
+      where: { block },
+      orderBy: { forDate: 'desc' },
+      select: { forDate: true },
+    });
+    if (!latest) return;
+
+    const anchor = this.persistentTaskDate();
+    await this.prisma.opsTask.updateMany({
+      where: { block, forDate: latest.forDate },
+      data: { recurring: true, forDate: anchor },
+    });
   }
 
   private readonly taskInclude = {
@@ -101,12 +135,11 @@ export class OperationsService {
     notes: { orderBy: { updatedAt: 'desc' as const }, take: 2 },
   };
 
-  private async applyOverdue(forDate: Date) {
+  private async applyOverdue() {
     const now = new Date();
     await this.prisma.opsTask.updateMany({
       where: {
-        forDate,
-        dueAt: { lt: now },
+        dueAt: { not: null, lt: now },
         status: { in: [OpsTaskStatus.PENDING, OpsTaskStatus.NOT_DONE, OpsTaskStatus.PARTIAL, OpsTaskStatus.NEEDS_ATTENTION] },
       },
       data: { status: OpsTaskStatus.OVERDUE },
@@ -131,7 +164,8 @@ export class OperationsService {
   async getBoard(block: OpsTimeBlock, dateRaw?: string) {
     await this.ensureDefaults();
     const forDate = parseDayParam(dateRaw);
-    await this.applyOverdue(forDate);
+    await this.migrateBlockToPersistentTasks(block);
+    await this.applyOverdue();
 
     const taskWhere = this.taskWhereForBlock(block, forDate);
     const rawTasks = await this.prisma.opsTask.findMany({
@@ -256,16 +290,9 @@ export class OperationsService {
   async listTasks(block: OpsTimeBlock, dateRaw?: string) {
     await this.ensureDefaults();
     const forDate = parseDayParam(dateRaw);
-    await this.applyOverdue(forDate);
-    const where: Prisma.OpsTaskWhereInput = { block, forDate };
-    if (block === OpsTimeBlock.WEEK) {
-      const mon = startUtcWeekMonday(forDate);
-      const sun = new Date(mon);
-      sun.setUTCDate(sun.getUTCDate() + 6);
-      where.forDate = { gte: mon, lte: sun };
-      delete (where as { block?: OpsTimeBlock }).block;
-      where.block = OpsTimeBlock.WEEK;
-    }
+    await this.migrateBlockToPersistentTasks(block);
+    await this.applyOverdue();
+    const where = this.taskWhereForBlock(block, forDate);
     const items = await this.prisma.opsTask.findMany({
       where,
       orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -291,11 +318,13 @@ export class OperationsService {
       checkType?: OpsTaskCheckType;
     },
   ) {
-    const forDate = parseDayParam(body.forDate);
+    const viewDate = parseDayParam(body.forDate);
+    const persistent = this.isPersistentDailyBlock(body.block);
+    const forDate = persistent ? this.persistentTaskDate() : viewDate;
     const checkType = body.checkType ?? inferCheckTypeFromTitle(body.title);
     const taskWhere = body.categoryId
       ? { categoryId: body.categoryId }
-      : this.taskWhereForBlock(body.block, forDate);
+      : this.taskWhereForBlock(body.block, viewDate);
     const max = await this.prisma.opsTask.aggregate({
       where: taskWhere,
       _max: { sortOrder: true },
@@ -311,7 +340,7 @@ export class OperationsService {
         dueAt: body.dueAt ? new Date(body.dueAt) : null,
         assigneeId: body.assigneeId || null,
         pinned: body.pinned ?? false,
-        recurring: body.recurring ?? false,
+        recurring: persistent ? true : (body.recurring ?? false),
         templateKey: body.templateKey ?? null,
         checkType,
         sortOrder: (max._max.sortOrder ?? -1) + 1,
@@ -443,10 +472,18 @@ export class OperationsService {
   async dashboard(dateRaw?: string) {
     await this.ensureDefaults();
     const forDate = parseDayParam(dateRaw);
-    await this.applyOverdue(forDate);
+    await this.applyOverdue();
+    for (const block of [
+      OpsTimeBlock.MORNING,
+      OpsTimeBlock.DAY,
+      OpsTimeBlock.EVENING,
+      OpsTimeBlock.NEXT_DAY,
+    ]) {
+      await this.migrateBlockToPersistentTasks(block);
+    }
     const tasks = await this.prisma.opsTask.findMany({
       where: {
-        forDate,
+        recurring: true,
         block: { not: OpsTimeBlock.WEEK },
       },
       include: { assignee: { select: { id: true, name: true } } },

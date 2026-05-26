@@ -41,7 +41,6 @@ export function OpsTaskBoard({ block, title }: Props) {
         method: 'POST',
         body: JSON.stringify({
           block,
-          forDate: date,
           title: newTitle,
           categoryLabel: OPS_SORT_CATEGORIES[0],
           checkType: 'GENERIC',
@@ -78,8 +77,17 @@ export function OpsTaskBoard({ block, title }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{title}</h2>
-        <Input type="date" className="w-[160px]" value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="flex flex-col items-end gap-0.5">
+          <label className="text-[10px] font-medium uppercase tracking-wide text-muted dark:text-white/40">
+            Дата фиксации
+          </label>
+          <Input type="date" className="w-[160px]" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
       </div>
+
+      <p className="text-xs text-muted dark:text-white/45">
+        Список задач сохраняется — на следующий день он не очищается. Дата справа влияет только на журнал фиксации.
+      </p>
 
       <div className="flex gap-2">
         <Input
