@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart, Gift } from 'lucide-react';
+import { Heart, Gift, X } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -141,11 +141,32 @@ function LoyaltyClientCard({ client }: { client: LoyaltyClient }) {
                 patchMu.mutate({ slot, masterName: next.trim() });
               }}
               className={cn(
-                'flex h-16 flex-col items-center justify-center rounded-xl border px-1 text-center transition',
+                'relative flex h-16 flex-col items-center justify-center rounded-xl border px-1 text-center transition',
                 stamp ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-300' : 'border-stroke bg-[hsl(var(--panel))] text-muted dark:border-white/[0.08] dark:text-white/55',
                 lockedGift && 'opacity-50',
               )}
             >
+              {stamp ?
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    patchMu.mutate({ slot, masterName: '' });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      patchMu.mutate({ slot, masterName: '' });
+                    }
+                  }}
+                  className="absolute right-1 top-1 rounded-full bg-black/10 p-0.5 text-zinc-700 hover:bg-black/20 dark:bg-white/10 dark:text-white/80 dark:hover:bg-white/20"
+                  title="Убрать сердечко"
+                >
+                  <X className="size-3" />
+                </span>
+              : null}
               <div className="flex items-center gap-1">
                 <Heart className={cn('size-4', stamp && 'fill-current')} />
                 <span className="text-[11px] font-semibold">{slot}</span>

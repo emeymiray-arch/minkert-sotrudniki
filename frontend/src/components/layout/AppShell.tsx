@@ -7,6 +7,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/context/auth';
+import type { UserRole } from '@/lib/types';
 import { useTheme } from '@/context/theme';
 import { cnRoleRu } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -21,10 +22,18 @@ const navItems = [
   { to: '/settings', label: 'Настройки', icon: Settings2, end: false },
 ];
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+function navItemsForRole(role?: UserRole) {
+  if (role === 'LOYALTY') {
+    return navItems.filter((item) => item.to === '/loyalty');
+  }
+  return navItems;
+}
+
+function SidebarNav({ role, onNavigate }: { role?: UserRole; onNavigate?: () => void }) {
+  const items = navItemsForRole(role);
   return (
     <nav className="flex flex-col gap-0.5 px-3">
-      {navItems.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink
@@ -90,7 +99,7 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-4">
-          <SidebarNav />
+          <SidebarNav role={user?.role} />
         </div>
 
         <div className="border-t border-stroke p-4 dark:border-white/[0.06]">
@@ -179,7 +188,7 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
         <DialogContent className="max-w-sm border-stroke dark:border-white/[0.08]">
           <DialogTitle className="text-base font-semibold">Разделы</DialogTitle>
           <div className="mt-4 -mx-1">
-            <SidebarNav onNavigate={() => setMobileOpen(false)} />
+            <SidebarNav role={user?.role} onNavigate={() => setMobileOpen(false)} />
           </div>
           <Button variant="outline" className="mt-6 w-full" onClick={() => logout().catch(() => undefined)}>
             Выйти

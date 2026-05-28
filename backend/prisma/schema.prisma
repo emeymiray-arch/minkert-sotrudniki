@@ -10,6 +10,7 @@ enum UserRole {
   ADMIN
   MANAGER
   VIEWER
+  LOYALTY
 }
 
 enum EmployeeStatus {

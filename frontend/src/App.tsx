@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,7 +36,8 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedLayout() {
-  const { booting, isAuthenticated } = useAuth();
+  const { booting, isAuthenticated, user } = useAuth();
+  const { pathname } = useLocation();
 
   if (booting) {
     return (
@@ -51,6 +52,10 @@ function ProtectedLayout() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role === 'LOYALTY' && pathname !== '/loyalty') {
+    return <Navigate to="/loyalty" replace />;
   }
 
   return (

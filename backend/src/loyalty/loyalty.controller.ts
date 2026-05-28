@@ -4,7 +4,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { LoyaltyService } from './loyalty.service';
 
 @Controller('loyalty')
-@Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
+@Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER, UserRole.LOYALTY)
 export class LoyaltyController {
   constructor(private readonly loyalty: LoyaltyService) {}
 
@@ -14,13 +14,13 @@ export class LoyaltyController {
   }
 
   @Post('clients')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.LOYALTY)
   create(@Body() body: { name: string; phone: string }) {
     return this.loyalty.createClient(body);
   }
 
   @Patch('clients/:id/stamps/:slot')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.LOYALTY)
   patchStamp(
     @Param('id') id: string,
     @Param('slot') slot: string,

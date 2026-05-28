@@ -19,6 +19,11 @@ export default function SettingsPage() {
   const { user, setUserProfile } = useAuth();
   const [name, setName] = React.useState(user?.name ?? '');
   const [email, setEmail] = React.useState(user?.email ?? '');
+  const [accName, setAccName] = React.useState('');
+  const [accEmail, setAccEmail] = React.useState('');
+  const [accPassword, setAccPassword] = React.useState('');
+  const [accRole, setAccRole] = React.useState<'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY'>('LOYALTY');
+  const [accLinkedEmployeeId, setAccLinkedEmployeeId] = React.useState('');
 
   const apiHint = getApiBaseUrl();
 
@@ -36,7 +41,7 @@ export default function SettingsPage() {
 
   const updateProfile = useMutation({
     mutationFn: () =>
-      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER'; linkedEmployeeId?: string | null }>(
+      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY'; linkedEmployeeId?: string | null }>(
         '/users/me',
         {
           method: 'PATCH',
@@ -48,6 +53,32 @@ export default function SettingsPage() {
       toast.success('Профиль руководителя обновлён');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось обновить профиль'),
+  });
+
+  const createAccount = useMutation({
+    mutationFn: () =>
+      apiJson<{ id: string; email: string; name: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY' }>(
+        '/auth/accounts',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: accName.trim(),
+            email: accEmail.trim(),
+            password: accPassword,
+            role: accRole,
+            linkedEmployeeId: accRole === 'VIEWER' ? (accLinkedEmployeeId.trim() || undefined) : undefined,
+          }),
+        },
+      ),
+    onSuccess: (next) => {
+      toast.success(`Аккаунт создан: ${next.email} (${cnRoleRu(next.role)})`);
+      setAccName('');
+      setAccEmail('');
+      setAccPassword('');
+      setAccRole('LOYALTY');
+      setAccLinkedEmployeeId('');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось создать аккаунт'),
   });
 
   return (
@@ -145,6 +176,49 @@ export default function SettingsPage() {
           передайте на этапе сборки фронта.
         </div>
       </Card>
+
+      {user?.role === 'ADMIN' ?
+        <Card>
+          <CardHeader
+            title="Создать аккаунт"
+            description="Для роли «Лояльность» сотрудник видит только вкладку программы лояльности."
+          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="Имя пользователя" />
+            <Input value={accEmail} onChange={(e) => setAccEmail(e.target.value)} placeholder="email@company.com" />
+            <Input
+              type="password"
+              value={accPassword}
+              onChange={(e) => setAccPassword(e.target.value)}
+              placeholder="Пароль (минимум 6 символов)"
+            />
+            <select
+              className="h-10 rounded-lg border border-stroke bg-[hsl(var(--panel))] px-3 text-sm outline-none dark:border-white/[0.08]"
+              value={accRole}
+              onChange={(e) => setAccRole(e.target.value as 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY')}
+            >
+              <option value="LOYALTY">Лояльность</option>
+              <option value="MANAGER">Менеджер</option>
+              <option value="VIEWER">Только просмотр</option>
+              <option value="ADMIN">Администратор</option>
+            </select>
+            {accRole === 'VIEWER' ?
+              <Input
+                value={accLinkedEmployeeId}
+                onChange={(e) => setAccLinkedEmployeeId(e.target.value)}
+                placeholder="linkedEmployeeId (опционально)"
+              />
+            : null}
+          </div>
+          <Button
+            className="mt-3"
+            disabled={!accName.trim() || !accEmail.trim() || accPassword.length < 6 || createAccount.isPending}
+            onClick={() => createAccount.mutate()}
+          >
+            {createAccount.isPending ? 'Создание…' : 'Создать аккаунт'}
+          </Button>
+        </Card>
+      : null}
     </div>
   );
 }
