@@ -10,6 +10,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import EmployeeDetailPage from '@/pages/EmployeeDetailPage';
 import EmployeesPage from '@/pages/EmployeesPage';
 import LoginPage from '@/pages/LoginPage';
+import LoyaltyPage from '@/pages/LoyaltyPage';
 import PublicDiaryPage from '@/pages/PublicDiaryPage';
 import PublicEmployeeTasksPage from '@/pages/PublicEmployeeTasksPage';
 import SettingsPage from '@/pages/SettingsPage';
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/finansy" element={<FinancePage />} />
+              <Route path="/loyalty" element={<LoyaltyPage />} />
               <Route path="/upravlenie/finansy" element={<Navigate to="/finansy" replace />} />
               <Route path="/settings" element={<SettingsPage />} />
 

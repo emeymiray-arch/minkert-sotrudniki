@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { motion } from 'framer-motion';
-import { Briefcase, ChevronDown, LayoutDashboard, LineChart, LogOut, Menu, Settings2, Sparkles, Users2, Wallet } from 'lucide-react';
+import { Briefcase, ChevronDown, Heart, LayoutDashboard, LineChart, LogOut, Menu, Settings2, Sparkles, Users2, Wallet } from 'lucide-react';
 import * as React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/', label: 'Обзор', icon: LayoutDashboard, end: true },
   { to: '/upravlenie', label: 'Контроль', icon: Briefcase, end: false },
   { to: '/finansy', label: 'Финансы', icon: Wallet, end: false },
+  { to: '/loyalty', label: 'Лояльность', icon: Heart, end: false },
   { to: '/employees', label: 'Сотрудники', icon: Users2, end: false },
   { to: '/analytics', label: 'Аналитика', icon: LineChart, end: false },
   { to: '/settings', label: 'Настройки', icon: Settings2, end: false },

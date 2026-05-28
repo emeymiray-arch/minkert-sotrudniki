@@ -336,6 +336,33 @@ model OpsFinanceDay {
   updatedAt   DateTime @updatedAt
 }
 
+model LoyaltyClient {
+  id              String         @id @default(cuid())
+  name            String
+  phone           String
+  phoneNormalized String         @unique
+  stamps          LoyaltyStamp[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([name])
+  @@index([phone])
+}
+
+model LoyaltyStamp {
+  id         String        @id @default(cuid())
+  clientId   String
+  client     LoyaltyClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  slot       Int
+  masterName String
+  stampedAt  DateTime      @default(now())
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([clientId, slot])
+  @@index([clientId, stampedAt])
+}
+
 model Task {
   id          String   @id @default(cuid())
   employeeId  String
