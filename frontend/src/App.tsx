@@ -23,6 +23,7 @@ import OpsSettingsPage from '@/operations/pages/OpsSettingsPage';
 import OpsStaffDetailPage from '@/operations/pages/OpsStaffDetailPage';
 import OpsStaffPage from '@/operations/pages/OpsStaffPage';
 import OpsJournalPage from '@/operations/pages/OpsJournalPage';
+import OpsProblemsPage from '@/operations/pages/OpsProblemsPage';
 import OpsViolationsPage from '@/operations/pages/OpsViolationsPage';
 
 const queryClient = new QueryClient({
@@ -96,6 +97,7 @@ export default function App() {
                 <Route path="sotrudniki/:id" element={<OpsStaffDetailPage />} />
                 <Route path="zhurnal" element={<OpsJournalPage />} />
                 <Route path="narusheniya" element={<OpsViolationsPage />} />
+                <Route path="problemy" element={<OpsProblemsPage />} />
                 <Route path="kontent" element={<OpsContentPage />} />
                 <Route path="analitika" element={<OpsAnalyticsPage />} />
                 <Route path="nastroyki" element={<OpsSettingsPage />} />

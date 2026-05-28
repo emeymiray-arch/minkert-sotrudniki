@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EmployeeStatus, Task } from '@prisma/client';
+import { EmployeeStatus, OpsTaskStatus, OpsTimeBlock, Task } from '@prisma/client';
 import { utcDateToWeekDayDb, WEEK_DAYS_DB } from '../common/constants/days';
 import {
   TaskDayValues,
@@ -245,7 +245,9 @@ export class AnalyticsService {
   }
 
   /**
-   * KPI руководителя = агрегат отметок чек-листов команды (0/1/2 → 0%/100%/115%).
+   * KPI управляющего:
+   * 1) личные задачи в «Контроле» (доля решенных),
+   * 2) KPI команды из чек-листов (0/1/2 → 0%/100%/115%).
    * Периоды считаются автоматически: сегодня, текущая неделя, текущий месяц.
    */
   async managerKpiSummary(asOf = new Date()) {
@@ -314,12 +316,35 @@ export class AnalyticsService {
         : 0,
     }));
 
+    const weekTasksOps = await this.prisma.opsTask.findMany({
+      where: {
+        OR: [
+          { recurring: true, block: { not: OpsTimeBlock.WEEK } },
+          { block: OpsTimeBlock.WEEK, forDate: { gte: weekMonday, lte: weekEnd } },
+        ],
+      },
+      select: { status: true },
+    });
+    const totalOps = weekTasksOps.length;
+    const doneOps = weekTasksOps.filter((t) => t.status === OpsTaskStatus.DONE).length;
+    const managerTasksKpi = totalOps ? (doneOps / totalOps) * 100 : 0;
+
     return {
       asOf: today.toISOString().slice(0, 10),
       weekAnchor: weekMonday.toISOString().slice(0, 10),
       month: `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`,
       activeEmployees: ids.length,
-      source: 'employee_checklists' as const,
+      source: 'manager_tasks_plus_team_checklists' as const,
+      managerTasks: {
+        label: 'Задачи управляющего',
+        solved: doneOps,
+        total: totalOps,
+        kpi: Number(managerTasksKpi.toFixed(2)),
+      },
+      teamResults: {
+        label: 'Результаты команды',
+        kpi: Number(weeklyKpi.toFixed(2)),
+      },
       daily: {
         label: 'Сегодня',
         weekday: ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'][today.getUTCDay()],

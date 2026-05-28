@@ -299,6 +299,33 @@ export class OperationsController {
     return this.ops.deleteViolation(user, id);
   }
 
+  @Get('problems')
+  problems() {
+    return this.ops.listProblems();
+  }
+
+  @Post('problems')
+  createProblem(
+    @CurrentUser() user: JwtUserPayload,
+    @Body() body: { title: string; description?: string },
+  ) {
+    return this.ops.createProblem(user, body);
+  }
+
+  @Patch('problems/:id')
+  patchProblem(
+    @CurrentUser() user: JwtUserPayload,
+    @Param('id') id: string,
+    @Body() body: Partial<{ title: string; description: string; resolved: boolean }>,
+  ) {
+    return this.ops.updateProblem(user, id, body);
+  }
+
+  @Delete('problems/:id')
+  deleteProblem(@CurrentUser() user: JwtUserPayload, @Param('id') id: string) {
+    return this.ops.deleteProblem(user, id);
+  }
+
   @Get('content-reviews')
   contentReviews(@Query('date') date?: string) {
     return this.ops.listContentReviews(date);

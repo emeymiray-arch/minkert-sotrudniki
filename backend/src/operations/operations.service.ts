@@ -796,6 +796,46 @@ export class OperationsService {
     return { ok: true };
   }
 
+  async listProblems() {
+    return this.prisma.opsProblem.findMany({
+      orderBy: [{ resolved: 'asc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  async createProblem(user: JwtUserPayload | undefined, body: { title: string; description?: string }) {
+    const row = await this.prisma.opsProblem.create({
+      data: {
+        title: body.title.trim(),
+        description: body.description?.trim() ?? '',
+      },
+    });
+    await this.log(user, 'problem', row.id, 'create', { title: row.title });
+    return row;
+  }
+
+  async updateProblem(
+    user: JwtUserPayload | undefined,
+    id: string,
+    body: Partial<{ title: string; description: string; resolved: boolean }>,
+  ) {
+    const data: Prisma.OpsProblemUpdateInput = {};
+    if (body.title !== undefined) data.title = body.title.trim();
+    if (body.description !== undefined) data.description = body.description.trim();
+    if (body.resolved !== undefined) {
+      data.resolved = body.resolved;
+      data.resolvedAt = body.resolved ? new Date() : null;
+    }
+    const row = await this.prisma.opsProblem.update({ where: { id }, data });
+    await this.log(user, 'problem', row.id, 'update', body as Prisma.InputJsonValue);
+    return row;
+  }
+
+  async deleteProblem(user: JwtUserPayload | undefined, id: string) {
+    await this.prisma.opsProblem.delete({ where: { id } });
+    await this.log(user, 'problem', id, 'delete');
+    return { ok: true };
+  }
+
   async listContentReviews(reviewDateRaw?: string) {
     const reviewDate = parseDayParam(reviewDateRaw);
     return this.prisma.opsContentReview.findMany({

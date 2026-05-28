@@ -50,7 +50,7 @@ export default function SettingsPage() {
       ),
     onSuccess: (next) => {
       setUserProfile(next);
-      toast.success('Профиль руководителя обновлён');
+      toast.success('Профиль управляющего обновлён');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось обновить профиль'),
   });
@@ -85,7 +85,7 @@ export default function SettingsPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <PageHeader
         title="Настройки"
-        description="Тема и профиль. KPI руководителя считается автоматически из чек-листов команды."
+        description="Тема и профиль. KPI управляющего: личные задачи в Контроле + результаты команды."
       />
 
       <Card>
@@ -113,14 +113,14 @@ export default function SettingsPage() {
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" />
               <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
               <Button onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
-                Сохранить профиль руководителя
+                Сохранить профиль управляющего
               </Button>
               <Badge tone="neutral" className="mt-2">
                 {cnRoleRu(user?.role ?? '—')}
               </Badge>
               {user?.role === 'VIEWER' ?
                 <p className="mt-3 text-xs leading-relaxed text-muted dark:text-white/50">
-                  Аккаунт начальника: разделы «Обзор» и «Аналитика» показывают KPI команды из чек-листов без ручного ввода.
+                  Аккаунт управляющего: разделы «Обзор» и «Аналитика» показывают KPI команды из чек-листов без ручного ввода.
                 </p>
               : null}
             </div>
@@ -130,13 +130,31 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader
-          title="Мой KPI как руководителя"
-          description="Считается из отметок сотрудников в чек-листах (0 → 0%, 1 → 100%, 2 → 115%). Даты выбирает система."
+          title="KPI управляющего"
+          description="Два блока: задачи управляющего в Контроле и результаты команды по KPI."
         />
         {managerKpi.isLoading ?
           <Skeleton className="h-[140px]" />
         : managerKpi.data ?
           <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">Задачи управляющего</div>
+                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">
+                  {managerKpi.data.managerTasks?.kpi ?? 0}%
+                </div>
+                <div className="mt-1 text-xs text-muted dark:text-white/50">
+                  Решено: {managerKpi.data.managerTasks?.solved ?? 0} из {managerKpi.data.managerTasks?.total ?? 0}
+                </div>
+              </div>
+              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">Результаты команды</div>
+                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">
+                  {managerKpi.data.teamResults?.kpi ?? managerKpi.data.weekly.kpi}%
+                </div>
+                <div className="mt-1 text-xs text-muted dark:text-white/50">Неделя с {managerKpi.data.weekAnchor}</div>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
                 <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.daily.label}</div>
@@ -160,7 +178,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <p className="text-xs leading-relaxed text-muted dark:text-white/50">
-              Активных сотрудников в расчёте: {managerKpi.data.activeEmployees}. Начальники с ролью «Наблюдатель» видят те же цифры в «Обзор» и «Аналитика».
+              Активных сотрудников в расчёте: {managerKpi.data.activeEmployees}. Управляющий с ролью «Наблюдатель» видит те же цифры в «Обзор» и «Аналитика».
             </p>
           </div>
         : <p className="text-sm text-muted">Нет данных — добавьте задачи и дождитесь отметок в чек-листах.</p>}

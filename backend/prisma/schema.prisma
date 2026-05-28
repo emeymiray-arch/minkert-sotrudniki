@@ -324,6 +324,18 @@ model OpsSettings {
   updatedAt             DateTime @updatedAt
 }
 
+model OpsProblem {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  resolved    Boolean  @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([resolved, createdAt])
+}
+
 /** Финансы: показатели по дням (выручка, расходы, скидки, ЗП, клиентки). */
 model OpsFinanceDay {
   id          String   @id @default(cuid())

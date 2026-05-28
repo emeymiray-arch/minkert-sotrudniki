@@ -69,7 +69,9 @@ export type ManagerKpiSummary = {
   weekAnchor: string;
   month: string;
   activeEmployees: number;
-  source: 'employee_checklists';
+  source: 'manager_tasks_plus_team_checklists' | 'employee_checklists';
+  managerTasks?: { label: string; solved: number; total: number; kpi: number };
+  teamResults?: { label: string; kpi: number };
   daily: { label: string; weekday: string; kpi: number };
   weekly: { label: string; kpi: number; weekOverWeekTrend: number };
   monthly: { label: string; kpi: number };

@@ -9,7 +9,7 @@ import { AnalyticsService } from './analytics.service';
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
-  /** Дневной / недельный / месячный KPI руководителя из чек-листов (даты — автоматически «сейчас»). */
+  /** KPI управляющего: личные задачи в «Контроле» + KPI команды из чек-листов. */
   @Get('manager-kpi')
   managerKpi() {
     return this.analytics.managerKpiSummary(new Date());
