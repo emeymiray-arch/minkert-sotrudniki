@@ -121,10 +121,6 @@ export class OperationsFinanceService {
     getEntry: (col: { date: string }) => DayEntry,
   ) {
     const revenueVals = columns.map((c) => getEntry(c).revenue);
-    const revenueNoDiscountVals = columns.map((c) => {
-      const e = getEntry(c);
-      return e.revenue - e.discounts;
-    });
     const expenseVals = columns.map((c) => getEntry(c).expenses);
     const discountVals = columns.map((c) => getEntry(c).discounts);
     const salaryVals = columns.map((c) => getEntry(c).salary);
@@ -138,12 +134,6 @@ export class OperationsFinanceService {
 
     return [
       { key: 'revenue', label: 'Выручка', values: revenueVals, total: sum(revenueVals) },
-      {
-        key: 'revenueNoDiscount',
-        label: 'Выручка без скидки',
-        values: revenueNoDiscountVals,
-        total: sum(revenueNoDiscountVals),
-      },
       { key: 'expenses', label: 'Расходы', values: expenseVals, total: sum(expenseVals) },
       { key: 'discounts', label: 'Скидки', values: discountVals, total: sum(discountVals) },
       { key: 'salary', label: 'ЗП', values: salaryVals, total: sum(salaryVals) },
@@ -203,12 +193,11 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          revenueNoDiscount: rows[1]!.total,
-          expenses: rows[2]!.total,
-          discounts: rows[3]!.total,
-          salary: rows[4]!.total,
-          net: rows[5]!.total,
-          clientCount: rows[6]!.total,
+          expenses: rows[1]!.total,
+          discounts: rows[2]!.total,
+          salary: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -236,12 +225,11 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          revenueNoDiscount: rows[1]!.total,
-          expenses: rows[2]!.total,
-          discounts: rows[3]!.total,
-          salary: rows[4]!.total,
-          net: rows[5]!.total,
-          clientCount: rows[6]!.total,
+          expenses: rows[1]!.total,
+          discounts: rows[2]!.total,
+          salary: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -323,12 +311,11 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          revenueNoDiscount: rows[1]!.total,
-          expenses: rows[2]!.total,
-          discounts: rows[3]!.total,
-          salary: rows[4]!.total,
-          net: rows[5]!.total,
-          clientCount: rows[6]!.total,
+          expenses: rows[1]!.total,
+          discounts: rows[2]!.total,
+          salary: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -390,12 +377,11 @@ export class OperationsFinanceService {
       columnFooters: footers,
       grandTotal: {
         revenue: rows[0]!.total,
-        revenueNoDiscount: rows[1]!.total,
-        expenses: rows[2]!.total,
-        discounts: rows[3]!.total,
-        salary: rows[4]!.total,
-        net: rows[5]!.total,
-        clientCount: rows[6]!.total,
+        expenses: rows[1]!.total,
+        discounts: rows[2]!.total,
+        salary: rows[3]!.total,
+        net: rows[4]!.total,
+        clientCount: rows[5]!.total,
       },
     };
   }
