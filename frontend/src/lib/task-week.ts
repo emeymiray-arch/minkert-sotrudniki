@@ -50,3 +50,15 @@ export function scoreLabelRu(score: number): string {
   if (score === 1) return 'Частично';
   return 'Сделано';
 }
+
+/** Подписи дат на неделю якоря (ПН..ВС) в формате DD.MM */
+export function weekDateLabels(weekAnchor: string): string[] {
+  const monday = new Date(`${weekMondayKey(weekAnchor)}T12:00:00.000Z`);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() + i);
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    return `${dd}.${mm}`;
+  });
+}

@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { utcMondayIso } from '@/lib/date';
-import { nextWeekMondayIso } from '@/lib/task-week';
+import { nextWeekMondayIso, weekDateLabels } from '@/lib/task-week';
 import { apiJson } from '@/lib/http';
 import { ruEmployeeStatus } from '@/lib/format';
 import { DAY_HEADER_CELL_CLASS, DAY_KEYS, DAY_LABEL_RU, DAY_MATRIX_CORNER_CLASS, nextStatus, WEEK_MATRIX_GRID_CLASS, type DayKey } from '@/lib/task-days';
@@ -73,6 +73,7 @@ export default function EmployeesPage() {
   const [editTitle, setEditTitle] = React.useState('');
   const [editDescription, setEditDescription] = React.useState('');
   const [editTaskDate, setEditTaskDate] = React.useState(utcMondayIso());
+  const weekLabels = React.useMemo(() => weekDateLabels(weekAnchor), [weekAnchor]);
 
   const queryString = React.useMemo(() => {
     const params = new URLSearchParams();
@@ -472,9 +473,12 @@ export default function EmployeesPage() {
                           Задачи
                         </span>
                       </div>
-                      {DAY_LABEL_RU.map((label) => (
+                      {DAY_LABEL_RU.map((label, idx) => (
                         <div key={label} className={DAY_HEADER_CELL_CLASS}>
-                          {label}
+                          <div className="flex flex-col items-center leading-tight">
+                            <span>{label}</span>
+                            <span className="text-[10px] font-medium opacity-80">{weekLabels[idx]}</span>
+                          </div>
                         </div>
                       ))}
 

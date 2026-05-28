@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { DiaryService } from './diary.service';
 import { SavePublicDiaryDayDto } from './dto/save-public-diary-day.dto';
+import { SubmitPublicDiaryDto } from './dto/submit-public-diary.dto';
 
 @Controller('public/diary')
 export class PublicDiaryController {
@@ -23,5 +24,11 @@ export class PublicDiaryController {
   @Put(':token/days/:date')
   putDay(@Param('token') token: string, @Param('date') date: string, @Body() dto: SavePublicDiaryDayDto) {
     return this.diary.savePublicDay(token, date, dto.lines);
+  }
+
+  @Public()
+  @Post(':token/submit')
+  submit(@Param('token') token: string, @Body() dto: SubmitPublicDiaryDto) {
+    return this.diary.submitPublicDay(token, dto.date);
   }
 }

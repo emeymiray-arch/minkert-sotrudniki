@@ -132,6 +132,31 @@ export class DiaryService {
     return this.getPublicDay(token, dateRaw);
   }
 
+  /** Явная отправка чек-листа руководителю: сохраняем лог сдачи отчета по дате. */
+  async submitPublicDay(token: string, dateRaw: string) {
+    const emp = await this.prisma.employee.findFirst({
+      where: { diaryToken: token },
+      select: { id: true },
+    });
+    if (!emp) throw new NotFoundException('Ссылка недействительна');
+    const date = parseDayParam(dateRaw);
+
+    await this.prisma.opsReportLog.create({
+      data: {
+        employeeId: emp.id,
+        formKey: 'public-diary-checklist',
+        reportDate: date,
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+        payload: {
+          source: 'public-diary-link',
+          date: isoDate(date),
+        },
+      },
+    });
+    return { ok: true, date: isoDate(date) };
+  }
+
   async listDaysForEmployee(employeeId: string, fromRaw: string, toRaw: string, user?: JwtUserPayload) {
     if (user?.role === UserRole.VIEWER && user.linkedEmployeeId !== employeeId) {
       throw new ForbiddenException('Нет доступа к дневнику этого сотрудника');

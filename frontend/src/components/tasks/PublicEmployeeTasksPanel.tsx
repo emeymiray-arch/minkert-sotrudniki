@@ -62,10 +62,18 @@ export function PublicEmployeeTasksPanel({
   const [sent, setSent] = React.useState(false);
 
   const submitToManager = () => {
-    setSent(true);
-    toast.success('Отправлено руководителю');
-    const url = `${window.location.pathname}?sent=1&date=${encodeURIComponent(dayIso)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    apiJson(`/public/diary/${encodeURIComponent(token)}/submit`, {
+      method: 'POST',
+      auth: false,
+      body: JSON.stringify({ date: dayIso }),
+    })
+      .then(() => {
+        setSent(true);
+        toast.success('Чек-лист отправлен руководителю');
+      })
+      .catch((err: Error) => {
+        toast.error(err.message || 'Не удалось отправить');
+      });
   };
 
   React.useEffect(() => {

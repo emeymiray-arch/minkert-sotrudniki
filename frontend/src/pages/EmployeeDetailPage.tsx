@@ -10,7 +10,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { EmployeeDiaryMarks } from '@/components/tasks/EmployeeDiaryMarks';
 import { TaskDayScoreCell } from '@/components/tasks/TaskDayScoreCell';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { tasksForWeek, weekMondayKey } from '@/lib/task-week';
+import { tasksForWeek, weekDateLabels, weekMondayKey } from '@/lib/task-week';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -214,6 +214,7 @@ export default function EmployeeDetailPage() {
   if (!id) return null;
 
   const items = tasksForWeek(tasks.data ?? [], viewWeek);
+  const weekLabels = React.useMemo(() => weekDateLabels(viewWeek), [viewWeek]);
   const emp = employee.data;
   const canEdit = canEditTaskDays(user, id);
   const canMeta = canManageTasks(user);
@@ -382,9 +383,12 @@ export default function EmployeeDetailPage() {
                       Задачи
                     </span>
                   </div>
-                  {DAY_LABEL_RU.map((label) => (
+                  {DAY_LABEL_RU.map((label, idx) => (
                     <div key={label} className={DAY_HEADER_CELL_CLASS}>
-                      {label}
+                      <div className="flex flex-col items-center leading-tight">
+                        <span>{label}</span>
+                        <span className="text-[10px] font-medium opacity-80">{weekLabels[idx]}</span>
+                      </div>
                     </div>
                   ))}
 
