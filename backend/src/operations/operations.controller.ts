@@ -420,6 +420,7 @@ export class OperationsController {
     body: {
       date: string;
       revenue?: number;
+      revenueNoDiscount?: number;
       expenses?: number;
       discounts?: number;
       salary?: number;

@@ -341,6 +341,7 @@ model OpsFinanceDay {
   id          String   @id @default(cuid())
   date        DateTime @unique @db.Date
   revenue     Int      @default(0)
+  revenueNoDiscount Int @default(0)
   expenses    Int      @default(0)
   discounts   Int      @default(0)
   salary      Int      @default(0)

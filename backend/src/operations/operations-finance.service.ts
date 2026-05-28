@@ -46,6 +46,7 @@ function net(revenue: number, expenses: number, discounts: number, salary: numbe
 type DayEntry = {
   date: string;
   revenue: number;
+  revenueNoDiscount: number;
   expenses: number;
   discounts: number;
   salary: number;
@@ -59,6 +60,7 @@ export class OperationsFinanceService {
   async upsertDay(body: {
     date: string;
     revenue?: number;
+    revenueNoDiscount?: number;
     expenses?: number;
     discounts?: number;
     salary?: number;
@@ -70,6 +72,7 @@ export class OperationsFinanceService {
       create: {
         date: d,
         revenue: Math.round(body.revenue ?? 0),
+        revenueNoDiscount: Math.round(body.revenueNoDiscount ?? 0),
         expenses: Math.round(body.expenses ?? 0),
         discounts: Math.round(body.discounts ?? 0),
         salary: Math.round(body.salary ?? 0),
@@ -77,6 +80,8 @@ export class OperationsFinanceService {
       },
       update: {
         revenue: body.revenue !== undefined ? Math.round(body.revenue) : undefined,
+        revenueNoDiscount:
+          body.revenueNoDiscount !== undefined ? Math.round(body.revenueNoDiscount) : undefined,
         expenses: body.expenses !== undefined ? Math.round(body.expenses) : undefined,
         discounts: body.discounts !== undefined ? Math.round(body.discounts) : undefined,
         salary: body.salary !== undefined ? Math.round(body.salary) : undefined,
@@ -86,6 +91,7 @@ export class OperationsFinanceService {
     return {
       date: isoDate(row.date),
       revenue: row.revenue,
+      revenueNoDiscount: row.revenueNoDiscount,
       expenses: row.expenses,
       discounts: row.discounts,
       salary: row.salary,
@@ -103,6 +109,7 @@ export class OperationsFinanceService {
       map.set(isoDate(r.date), {
         date: isoDate(r.date),
         revenue: r.revenue,
+        revenueNoDiscount: r.revenueNoDiscount,
         expenses: r.expenses,
         discounts: r.discounts,
         salary: r.salary,
@@ -113,7 +120,7 @@ export class OperationsFinanceService {
   }
 
   private emptyDay(date: string): DayEntry {
-    return { date, revenue: 0, expenses: 0, discounts: 0, salary: 0, clientCount: 0 };
+    return { date, revenue: 0, revenueNoDiscount: 0, expenses: 0, discounts: 0, salary: 0, clientCount: 0 };
   }
 
   private buildRows(
@@ -121,6 +128,7 @@ export class OperationsFinanceService {
     getEntry: (col: { date: string }) => DayEntry,
   ) {
     const revenueVals = columns.map((c) => getEntry(c).revenue);
+    const revenueNoDiscountVals = columns.map((c) => getEntry(c).revenueNoDiscount);
     const expenseVals = columns.map((c) => getEntry(c).expenses);
     const discountVals = columns.map((c) => getEntry(c).discounts);
     const salaryVals = columns.map((c) => getEntry(c).salary);
@@ -134,6 +142,12 @@ export class OperationsFinanceService {
 
     return [
       { key: 'revenue', label: 'Выручка', values: revenueVals, total: sum(revenueVals) },
+      {
+        key: 'revenueNoDiscount',
+        label: 'Выручка без скидки',
+        values: revenueNoDiscountVals,
+        total: sum(revenueNoDiscountVals),
+      },
       { key: 'expenses', label: 'Расходы', values: expenseVals, total: sum(expenseVals) },
       { key: 'discounts', label: 'Скидки', values: discountVals, total: sum(discountVals) },
       { key: 'salary', label: 'ЗП', values: salaryVals, total: sum(salaryVals) },
@@ -193,11 +207,12 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          expenses: rows[1]!.total,
-          discounts: rows[2]!.total,
-          salary: rows[3]!.total,
-          net: rows[4]!.total,
-          clientCount: rows[5]!.total,
+          revenueNoDiscount: rows[1]!.total,
+          expenses: rows[2]!.total,
+          discounts: rows[3]!.total,
+          salary: rows[4]!.total,
+          net: rows[5]!.total,
+          clientCount: rows[6]!.total,
         },
       };
     }
@@ -225,11 +240,12 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          expenses: rows[1]!.total,
-          discounts: rows[2]!.total,
-          salary: rows[3]!.total,
-          net: rows[4]!.total,
-          clientCount: rows[5]!.total,
+          revenueNoDiscount: rows[1]!.total,
+          expenses: rows[2]!.total,
+          discounts: rows[3]!.total,
+          salary: rows[4]!.total,
+          net: rows[5]!.total,
+          clientCount: rows[6]!.total,
         },
       };
     }
@@ -311,11 +327,12 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          expenses: rows[1]!.total,
-          discounts: rows[2]!.total,
-          salary: rows[3]!.total,
-          net: rows[4]!.total,
-          clientCount: rows[5]!.total,
+          revenueNoDiscount: rows[1]!.total,
+          expenses: rows[2]!.total,
+          discounts: rows[3]!.total,
+          salary: rows[4]!.total,
+          net: rows[5]!.total,
+          clientCount: rows[6]!.total,
         },
       };
     }
@@ -377,11 +394,12 @@ export class OperationsFinanceService {
       columnFooters: footers,
       grandTotal: {
         revenue: rows[0]!.total,
-        expenses: rows[1]!.total,
-        discounts: rows[2]!.total,
-        salary: rows[3]!.total,
-        net: rows[4]!.total,
-        clientCount: rows[5]!.total,
+        revenueNoDiscount: rows[1]!.total,
+        expenses: rows[2]!.total,
+        discounts: rows[3]!.total,
+        salary: rows[4]!.total,
+        net: rows[5]!.total,
+        clientCount: rows[6]!.total,
       },
     };
   }
