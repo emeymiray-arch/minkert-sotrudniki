@@ -31,6 +31,7 @@ type FinanceTable = {
   }>;
   grandTotal: {
     revenue: number;
+    revenueNoDiscount: number;
     expenses: number;
     discounts: number;
     salary: number;
@@ -225,6 +226,10 @@ export default function FinancePage() {
         <div className="flex flex-wrap gap-6 text-sm text-muted dark:text-white/50">
           <span>
             Выручка: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.revenue)}</strong>
+          </span>
+          <span>
+            Выручка без скидки:{' '}
+            <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.revenueNoDiscount)}</strong>
           </span>
           <span>
             Расходы: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.expenses)}</strong>

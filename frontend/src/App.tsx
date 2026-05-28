@@ -82,8 +82,10 @@ export default function App() {
               <Route path="/employees/:id" element={<EmployeeDetailPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/finansy" element={<FinancePage />} />
+              <Route path="/problemy" element={<OpsProblemsPage />} />
               <Route path="/loyalty" element={<LoyaltyPage />} />
               <Route path="/upravlenie/finansy" element={<Navigate to="/finansy" replace />} />
+              <Route path="/upravlenie/problemy" element={<Navigate to="/problemy" replace />} />
               <Route path="/settings" element={<SettingsPage />} />
 
               <Route path="/upravlenie" element={<OpsLayout />}>
@@ -97,7 +99,6 @@ export default function App() {
                 <Route path="sotrudniki/:id" element={<OpsStaffDetailPage />} />
                 <Route path="zhurnal" element={<OpsJournalPage />} />
                 <Route path="narusheniya" element={<OpsViolationsPage />} />
-                <Route path="problemy" element={<OpsProblemsPage />} />
                 <Route path="kontent" element={<OpsContentPage />} />
                 <Route path="analitika" element={<OpsAnalyticsPage />} />
                 <Route path="nastroyki" element={<OpsSettingsPage />} />
