@@ -283,6 +283,7 @@ export class OperationsFinanceService {
         const mi = start.getUTCMonth();
         const dim = daysInMonth(yy, mi);
         let revenue = 0;
+        let revenueNoDiscount = 0;
         let expenses = 0;
         let discounts = 0;
         let salary = 0;
@@ -290,12 +291,13 @@ export class OperationsFinanceService {
         for (let d = 1; d <= dim; d++) {
           const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
           revenue += e.revenue;
+          revenueNoDiscount += e.revenueNoDiscount;
           expenses += e.expenses;
           discounts += e.discounts;
           salary += e.salary;
           clientCount += e.clientCount;
         }
-        return { date: startIso, revenue, expenses, discounts, salary, clientCount };
+        return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, clientCount };
       };
 
       const getEntry = (col: { date: string }) => aggregate(col.date);
@@ -356,6 +358,7 @@ export class OperationsFinanceService {
       const mi = start.getUTCMonth();
       const dim = daysInMonth(yy, mi);
       let revenue = 0;
+      let revenueNoDiscount = 0;
       let expenses = 0;
       let discounts = 0;
       let salary = 0;
@@ -363,12 +366,13 @@ export class OperationsFinanceService {
       for (let d = 1; d <= dim; d++) {
         const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
         revenue += e.revenue;
+        revenueNoDiscount += e.revenueNoDiscount;
         expenses += e.expenses;
         discounts += e.discounts;
         salary += e.salary;
         clientCount += e.clientCount;
       }
-      return { date: startIso, revenue, expenses, discounts, salary, clientCount };
+      return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, clientCount };
     };
 
     const rows = this.buildRows(columns, (col) => aggregateMonth(col.date));
