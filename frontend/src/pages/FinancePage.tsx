@@ -24,6 +24,7 @@ type FinanceTable = {
     date: string;
     revenue: number;
     expenses: number;
+    discounts: number;
     salary: number;
     net: number;
     clientCount: number;
@@ -31,6 +32,7 @@ type FinanceTable = {
   grandTotal: {
     revenue: number;
     expenses: number;
+    discounts: number;
     salary: number;
     net: number;
     clientCount: number;
@@ -44,7 +46,7 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: 'year', label: 'Год' },
 ];
 
-const EDITABLE_METRICS = new Set(['revenue', 'expenses', 'salary', 'clients']);
+const EDITABLE_METRICS = new Set(['revenue', 'expenses', 'discounts', 'salary', 'clients']);
 
 function periodRowLabel(period: Period): string {
   if (period === 'month') return 'День';
@@ -226,6 +228,9 @@ export default function FinancePage() {
           </span>
           <span>
             Расходы: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.expenses)}</strong>
+          </span>
+          <span>
+            Скидки: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.discounts)}</strong>
           </span>
           <span>
             ЗП: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.salary)}</strong>

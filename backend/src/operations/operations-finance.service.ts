@@ -39,14 +39,15 @@ function daysInMonth(y: number, m: number): number {
   return new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
 }
 
-function net(revenue: number, expenses: number, salary: number): number {
-  return revenue - expenses - salary;
+function net(revenue: number, expenses: number, discounts: number, salary: number): number {
+  return revenue - expenses - discounts - salary;
 }
 
 type DayEntry = {
   date: string;
   revenue: number;
   expenses: number;
+  discounts: number;
   salary: number;
   clientCount: number;
 };
@@ -59,6 +60,7 @@ export class OperationsFinanceService {
     date: string;
     revenue?: number;
     expenses?: number;
+    discounts?: number;
     salary?: number;
     clientCount?: number;
   }) {
@@ -69,12 +71,14 @@ export class OperationsFinanceService {
         date: d,
         revenue: Math.round(body.revenue ?? 0),
         expenses: Math.round(body.expenses ?? 0),
+        discounts: Math.round(body.discounts ?? 0),
         salary: Math.round(body.salary ?? 0),
         clientCount: Math.round(body.clientCount ?? 0),
       },
       update: {
         revenue: body.revenue !== undefined ? Math.round(body.revenue) : undefined,
         expenses: body.expenses !== undefined ? Math.round(body.expenses) : undefined,
+        discounts: body.discounts !== undefined ? Math.round(body.discounts) : undefined,
         salary: body.salary !== undefined ? Math.round(body.salary) : undefined,
         clientCount: body.clientCount !== undefined ? Math.round(body.clientCount) : undefined,
       },
@@ -83,9 +87,10 @@ export class OperationsFinanceService {
       date: isoDate(row.date),
       revenue: row.revenue,
       expenses: row.expenses,
+      discounts: row.discounts,
       salary: row.salary,
       clientCount: row.clientCount,
-      net: net(row.revenue, row.expenses, row.salary),
+      net: net(row.revenue, row.expenses, row.discounts, row.salary),
     };
   }
 
@@ -99,6 +104,7 @@ export class OperationsFinanceService {
         date: isoDate(r.date),
         revenue: r.revenue,
         expenses: r.expenses,
+        discounts: r.discounts,
         salary: r.salary,
         clientCount: r.clientCount,
       });
@@ -107,7 +113,7 @@ export class OperationsFinanceService {
   }
 
   private emptyDay(date: string): DayEntry {
-    return { date, revenue: 0, expenses: 0, salary: 0, clientCount: 0 };
+    return { date, revenue: 0, expenses: 0, discounts: 0, salary: 0, clientCount: 0 };
   }
 
   private buildRows(
@@ -116,11 +122,12 @@ export class OperationsFinanceService {
   ) {
     const revenueVals = columns.map((c) => getEntry(c).revenue);
     const expenseVals = columns.map((c) => getEntry(c).expenses);
+    const discountVals = columns.map((c) => getEntry(c).discounts);
     const salaryVals = columns.map((c) => getEntry(c).salary);
     const clientVals = columns.map((c) => getEntry(c).clientCount);
     const netVals = columns.map((c) => {
       const e = getEntry(c);
-      return net(e.revenue, e.expenses, e.salary);
+      return net(e.revenue, e.expenses, e.discounts, e.salary);
     });
 
     const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
@@ -128,10 +135,11 @@ export class OperationsFinanceService {
     return [
       { key: 'revenue', label: 'Выручка', values: revenueVals, total: sum(revenueVals) },
       { key: 'expenses', label: 'Расходы', values: expenseVals, total: sum(expenseVals) },
+      { key: 'discounts', label: 'Скидки', values: discountVals, total: sum(discountVals) },
       { key: 'salary', label: 'ЗП', values: salaryVals, total: sum(salaryVals) },
       {
         key: 'net',
-        label: 'Выручка без ЗП и расхода',
+        label: 'Выручка без ЗП, расхода и скидок',
         values: netVals,
         total: sum(netVals),
       },
@@ -147,8 +155,9 @@ export class OperationsFinanceService {
         date: col.date,
         revenue: e.revenue,
         expenses: e.expenses,
+        discounts: e.discounts,
         salary: e.salary,
-        net: net(e.revenue, e.expenses, e.salary),
+        net: net(e.revenue, e.expenses, e.discounts, e.salary),
         clientCount: e.clientCount,
       };
     });
@@ -185,9 +194,10 @@ export class OperationsFinanceService {
         grandTotal: {
           revenue: rows[0]!.total,
           expenses: rows[1]!.total,
-          salary: rows[2]!.total,
-          net: rows[3]!.total,
-          clientCount: rows[4]!.total,
+          discounts: rows[2]!.total,
+          salary: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -216,9 +226,10 @@ export class OperationsFinanceService {
         grandTotal: {
           revenue: rows[0]!.total,
           expenses: rows[1]!.total,
-          salary: rows[2]!.total,
-          net: rows[3]!.total,
-          clientCount: rows[4]!.total,
+          discounts: rows[2]!.total,
+          salary: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -257,16 +268,18 @@ export class OperationsFinanceService {
         const dim = daysInMonth(yy, mi);
         let revenue = 0;
         let expenses = 0;
+        let discounts = 0;
         let salary = 0;
         let clientCount = 0;
         for (let d = 1; d <= dim; d++) {
           const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
           revenue += e.revenue;
           expenses += e.expenses;
+          discounts += e.discounts;
           salary += e.salary;
           clientCount += e.clientCount;
         }
-        return { date: startIso, revenue, expenses, salary, clientCount };
+        return { date: startIso, revenue, expenses, discounts, salary, clientCount };
       };
 
       const getEntry = (col: { date: string }) => aggregate(col.date);
@@ -281,8 +294,9 @@ export class OperationsFinanceService {
           date: c.date,
           revenue: e.revenue,
           expenses: e.expenses,
+          discounts: e.discounts,
           salary: e.salary,
-          net: net(e.revenue, e.expenses, e.salary),
+          net: net(e.revenue, e.expenses, e.discounts, e.salary),
           clientCount: e.clientCount,
         };
       });
@@ -298,9 +312,10 @@ export class OperationsFinanceService {
         grandTotal: {
           revenue: rows[0]!.total,
           expenses: rows[1]!.total,
-          salary: rows[2]!.total,
-          net: rows[3]!.total,
-          clientCount: rows[4]!.total,
+          discounts: rows[2]!.total,
+          salary: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -325,16 +340,18 @@ export class OperationsFinanceService {
       const dim = daysInMonth(yy, mi);
       let revenue = 0;
       let expenses = 0;
+      let discounts = 0;
       let salary = 0;
       let clientCount = 0;
       for (let d = 1; d <= dim; d++) {
         const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
         revenue += e.revenue;
         expenses += e.expenses;
+        discounts += e.discounts;
         salary += e.salary;
         clientCount += e.clientCount;
       }
-      return { date: startIso, revenue, expenses, salary, clientCount };
+      return { date: startIso, revenue, expenses, discounts, salary, clientCount };
     };
 
     const rows = this.buildRows(columns, (col) => aggregateMonth(col.date));
@@ -344,8 +361,9 @@ export class OperationsFinanceService {
         date: c.date,
         revenue: e.revenue,
         expenses: e.expenses,
+        discounts: e.discounts,
         salary: e.salary,
-        net: net(e.revenue, e.expenses, e.salary),
+        net: net(e.revenue, e.expenses, e.discounts, e.salary),
         clientCount: e.clientCount,
       };
     });
@@ -360,9 +378,10 @@ export class OperationsFinanceService {
       grandTotal: {
         revenue: rows[0]!.total,
         expenses: rows[1]!.total,
-        salary: rows[2]!.total,
-        net: rows[3]!.total,
-        clientCount: rows[4]!.total,
+        discounts: rows[2]!.total,
+        salary: rows[3]!.total,
+        net: rows[4]!.total,
+        clientCount: rows[5]!.total,
       },
     };
   }

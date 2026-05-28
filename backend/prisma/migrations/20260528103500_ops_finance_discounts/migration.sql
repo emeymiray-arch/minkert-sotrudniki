@@ -1,0 +1,2 @@
+ALTER TABLE "OpsFinanceDay"
+ADD COLUMN "discounts" INTEGER NOT NULL DEFAULT 0;

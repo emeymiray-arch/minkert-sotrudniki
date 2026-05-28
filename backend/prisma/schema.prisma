@@ -323,12 +323,13 @@ model OpsSettings {
   updatedAt             DateTime @updatedAt
 }
 
-/** Финансы: показатели по дням (выручка, расходы, ЗП, клиентки). */
+/** Финансы: показатели по дням (выручка, расходы, скидки, ЗП, клиентки). */
 model OpsFinanceDay {
   id          String   @id @default(cuid())
   date        DateTime @unique @db.Date
   revenue     Int      @default(0)
   expenses    Int      @default(0)
+  discounts   Int      @default(0)
   salary      Int      @default(0)
   clientCount Int      @default(0)
   createdAt   DateTime @default(now())

@@ -394,6 +394,7 @@ export class OperationsController {
       date: string;
       revenue?: number;
       expenses?: number;
+      discounts?: number;
       salary?: number;
       clientCount?: number;
     },
