@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
+import { toast } from 'sonner';
 
+import { FinanceMoneyInput } from '@/components/finance/FinanceMoneyInput';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatMoneyDisplay } from '@/lib/finance-format';
 import { apiJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +50,25 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: 'year', label: 'Год' },
 ];
 
-const EDITABLE_METRICS = new Set(['revenue', 'revenueNoDiscount', 'expenses', 'discounts', 'salary', 'clients']);
+const EDITABLE_METRICS = new Set([
+  'revenue',
+  'revenueNoDiscount',
+  'expenses',
+  'discounts',
+  'salary',
+  'net',
+  'clients',
+]);
+
+const METRIC_TO_GRAND: Record<string, keyof FinanceTable['grandTotal']> = {
+  revenue: 'revenue',
+  revenueNoDiscount: 'revenueNoDiscount',
+  expenses: 'expenses',
+  discounts: 'discounts',
+  salary: 'salary',
+  net: 'net',
+  clients: 'clientCount',
+};
 
 function periodRowLabel(period: Period): string {
   if (period === 'month') return 'День';
@@ -57,7 +78,7 @@ function periodRowLabel(period: Period): string {
 
 function fmt(n: number): string {
   if (n === 0) return '—';
-  return n.toLocaleString('en-US');
+  return formatMoneyDisplay(n);
 }
 
 function shiftAnchor(anchor: string, period: Period, dir: -1 | 1): string {
@@ -72,6 +93,23 @@ function shiftAnchor(anchor: string, period: Period, dir: -1 | 1): string {
   return d.toISOString().slice(0, 10);
 }
 
+function patchFinanceCell(data: FinanceTable, date: string, field: string, value: number): FinanceTable {
+  const colIdx = data.columns.findIndex((c) => c.date === date);
+  if (colIdx < 0) return data;
+
+  const rows = data.rows.map((row) => {
+    if (row.key !== field) return row;
+    const values = [...row.values];
+    values[colIdx] = value;
+    return { ...row, values, total: values.reduce((a, b) => a + b, 0) };
+  });
+
+  const grandKey = METRIC_TO_GRAND[field];
+  const grandTotal = grandKey ? { ...data.grandTotal, [grandKey]: rows.find((r) => r.key === field)?.total ?? value } : data.grandTotal;
+
+  return { ...data, rows, grandTotal };
+}
+
 export default function FinancePage() {
   const [period, setPeriod] = React.useState<Period>('month');
   const [anchor, setAnchor] = React.useState(() => {
@@ -83,6 +121,7 @@ export default function FinancePage() {
   const tableQ = useQuery({
     queryKey: ['finance', period, anchor],
     queryFn: () => apiJson<FinanceTable>(`/operations/finance/table?period=${period}&anchor=${anchor}`),
+    placeholderData: (prev) => prev,
   });
 
   const saveMu = useMutation({
@@ -92,7 +131,18 @@ export default function FinancePage() {
       else payload[body.field] = body.value;
       return apiJson('/operations/finance/day', { method: 'PATCH', body: JSON.stringify(payload) });
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['finance', period, anchor] }),
+    onMutate: async (vars) => {
+      const key = ['finance', period, anchor] as const;
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<FinanceTable>(key);
+      if (prev) qc.setQueryData(key, patchFinanceCell(prev, vars.date, vars.field, vars.value));
+      return { prev };
+    },
+    onError: (err, _vars, ctx) => {
+      const key = ['finance', period, anchor] as const;
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev);
+      toast.error(err instanceof Error ? err.message : 'Не удалось сохранить');
+    },
   });
 
   const data = tableQ.data;
@@ -102,7 +152,7 @@ export default function FinancePage() {
     <div className="space-y-8">
       <PageHeader
         title="Финансы"
-        description="Показатели в столбцах, дни и месяцы — строками. Удобно листать вниз."
+        description="Все показатели вводятся вручную. Числа форматируются с запятыми (например 223,666)."
         actions={
           <div className="flex flex-wrap gap-1">
             {PERIODS.map((p) => (
@@ -132,7 +182,7 @@ export default function FinancePage() {
         </Button>
       </div>
 
-      {tableQ.isLoading ?
+      {tableQ.isLoading && !data ?
         <Skeleton className="h-[320px]" />
       : !data ?
         null
@@ -171,19 +221,16 @@ export default function FinancePage() {
                   {data.rows.map((metric) => {
                     const val = metric.values[rowIdx] ?? 0;
                     const editable = canEdit && EDITABLE_METRICS.has(metric.key);
+                    const field = metric.key === 'clients' ? 'clients' : metric.key;
                     return (
                       <td
                         key={`${col.key}-${metric.key}`}
                         className="border-l border-stroke/40 px-3 py-1.5 text-right dark:border-white/[0.05]"
                       >
                         {editable ?
-                          <input
-                            type="number"
-                            className="h-9 w-full min-w-[5rem] max-w-[8rem] ml-auto border-0 bg-transparent text-right text-sm tabular-nums outline-none focus:bg-accent/10 dark:text-white"
-                            defaultValue={val || ''}
-                            onBlur={(e) => {
-                              const n = Math.round(Number(e.target.value) || 0);
-                              const field = metric.key === 'clients' ? 'clients' : metric.key;
+                          <FinanceMoneyInput
+                            value={val}
+                            onCommit={(n) => {
                               if (n !== val) saveMu.mutate({ date: col.date, field, value: n });
                             }}
                           />

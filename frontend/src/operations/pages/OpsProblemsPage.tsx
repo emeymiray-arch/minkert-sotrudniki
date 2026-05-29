@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
+import { cn } from '@/lib/utils';
 
 type OpsProblem = {
   id: string;
@@ -25,6 +26,7 @@ export default function OpsProblemsPage() {
   const q = useQuery({
     queryKey: ['ops', 'problems'],
     queryFn: () => apiJson<OpsProblem[]>('/operations/problems'),
+    staleTime: 60_000,
   });
 
   const createMu = useMutation({
@@ -76,29 +78,63 @@ export default function OpsProblemsPage() {
           {(q.data ?? []).map((p) => (
             <li
               key={p.id}
-              className="flex items-center gap-3 rounded-xl border border-stroke bg-[hsl(var(--panel))] px-3 py-2 dark:border-white/[0.08]"
+              className={cn(
+                'flex items-center gap-3 rounded-xl border bg-[hsl(var(--panel))] px-3 py-2 dark:border-white/[0.08]',
+                p.resolved ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : 'border-stroke',
+              )}
             >
-              <Checkbox
-                checked={p.resolved}
-                onCheckedChange={(c) => patchMu.mutate({ id: p.id, resolved: Boolean(c) })}
-              />
+              <div className="flex shrink-0 items-center">
+                {p.resolved ?
+                  <span
+                    className="flex size-8 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    aria-label="Решено"
+                  >
+                    <Check className="size-5 stroke-[2.5]" />
+                  </span>
+                : <Checkbox
+                    checked={false}
+                    onCheckedChange={() => patchMu.mutate({ id: p.id, resolved: true })}
+                    aria-label="Отметить решённой"
+                  />
+                }
+              </div>
               <div className="min-w-0 flex-1">
-                <div className={`text-sm ${p.resolved ? 'line-through text-muted dark:text-white/40' : 'text-zinc-900 dark:text-white'}`}>
+                <div
+                  className={cn(
+                    'text-sm',
+                    p.resolved ?
+                      'text-emerald-800 dark:text-emerald-300'
+                    : 'text-zinc-900 dark:text-white',
+                  )}
+                >
                   {p.title}
                 </div>
                 {p.resolvedAt ?
-                  <div className="text-[11px] text-muted dark:text-white/45">Решено: {p.resolvedAt.slice(0, 10)}</div>
+                  <div className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                    Решено: {p.resolvedAt.slice(0, 10)}
+                  </div>
                 : null}
               </div>
-              <button
-                type="button"
-                className="text-rose-600/80 hover:text-rose-700"
-                onClick={() => deleteMu.mutate(p.id)}
-                aria-label="Удалить проблему"
-                title="Удалить"
-              >
-                <Trash2 className="size-4" />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {p.resolved ?
+                  <button
+                    type="button"
+                    className="text-xs text-muted underline-offset-2 hover:underline dark:text-white/50"
+                    onClick={() => patchMu.mutate({ id: p.id, resolved: false })}
+                  >
+                    Вернуть
+                  </button>
+                : null}
+                <button
+                  type="button"
+                  className="text-rose-600/80 hover:text-rose-700"
+                  onClick={() => deleteMu.mutate(p.id)}
+                  aria-label="Удалить проблему"
+                  title="Удалить"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
             </li>
           ))}
           {!q.data?.length ?

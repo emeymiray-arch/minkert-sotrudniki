@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -41,6 +41,12 @@ export class EmployeeTasksController {
 @Controller('tasks')
 export class TasksController {
   constructor(private readonly tasks: TasksService) {}
+
+  @Get('week-board')
+  weekBoard(@Query('week') week?: string) {
+    if (!week?.trim()) throw new BadRequestException('Параметр week обязателен');
+    return this.tasks.listWeekBoard(week);
+  }
 
   @Patch(':id')
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)

@@ -32,6 +32,18 @@
   --ring-focus: 252 91% 68%;
 }
 
+@layer utilities {
+  .finance-money-input::-webkit-outer-spin-button,
+  .finance-money-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .finance-money-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
 @layer base {
   * {
     @apply border-stroke;

@@ -39,10 +39,6 @@ function daysInMonth(y: number, m: number): number {
   return new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
 }
 
-function net(revenue: number, expenses: number, discounts: number, salary: number): number {
-  return revenue - expenses - discounts - salary;
-}
-
 type DayEntry = {
   date: string;
   revenue: number;
@@ -50,6 +46,7 @@ type DayEntry = {
   expenses: number;
   discounts: number;
   salary: number;
+  net: number;
   clientCount: number;
 };
 
@@ -64,6 +61,7 @@ export class OperationsFinanceService {
     expenses?: number;
     discounts?: number;
     salary?: number;
+    net?: number;
     clientCount?: number;
   }) {
     const d = parseDateParam(body.date);
@@ -96,7 +94,7 @@ export class OperationsFinanceService {
       discounts: row.discounts,
       salary: row.salary,
       clientCount: row.clientCount,
-      net: net(row.revenue, row.expenses, row.discounts, row.salary),
+      net: row.net,
     };
   }
 
@@ -113,6 +111,7 @@ export class OperationsFinanceService {
         expenses: r.expenses,
         discounts: r.discounts,
         salary: r.salary,
+        net: r.net,
         clientCount: r.clientCount,
       });
     }
@@ -120,7 +119,16 @@ export class OperationsFinanceService {
   }
 
   private emptyDay(date: string): DayEntry {
-    return { date, revenue: 0, revenueNoDiscount: 0, expenses: 0, discounts: 0, salary: 0, clientCount: 0 };
+    return {
+      date,
+      revenue: 0,
+      revenueNoDiscount: 0,
+      expenses: 0,
+      discounts: 0,
+      salary: 0,
+      net: 0,
+      clientCount: 0,
+    };
   }
 
   private buildRows(
@@ -133,10 +141,7 @@ export class OperationsFinanceService {
     const discountVals = columns.map((c) => getEntry(c).discounts);
     const salaryVals = columns.map((c) => getEntry(c).salary);
     const clientVals = columns.map((c) => getEntry(c).clientCount);
-    const netVals = columns.map((c) => {
-      const e = getEntry(c);
-      return net(e.revenue, e.expenses, e.discounts, e.salary);
-    });
+    const netVals = columns.map((c) => getEntry(c).net);
 
     const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 
@@ -171,7 +176,7 @@ export class OperationsFinanceService {
         expenses: e.expenses,
         discounts: e.discounts,
         salary: e.salary,
-        net: net(e.revenue, e.expenses, e.discounts, e.salary),
+        net: e.net,
         clientCount: e.clientCount,
       };
     });
@@ -287,6 +292,7 @@ export class OperationsFinanceService {
         let expenses = 0;
         let discounts = 0;
         let salary = 0;
+        let net = 0;
         let clientCount = 0;
         for (let d = 1; d <= dim; d++) {
           const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
@@ -295,9 +301,10 @@ export class OperationsFinanceService {
           expenses += e.expenses;
           discounts += e.discounts;
           salary += e.salary;
+          net += e.net;
           clientCount += e.clientCount;
         }
-        return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, clientCount };
+        return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount };
       };
 
       const getEntry = (col: { date: string }) => aggregate(col.date);
@@ -314,7 +321,7 @@ export class OperationsFinanceService {
           expenses: e.expenses,
           discounts: e.discounts,
           salary: e.salary,
-          net: net(e.revenue, e.expenses, e.discounts, e.salary),
+          net: e.net,
           clientCount: e.clientCount,
         };
       });
@@ -362,6 +369,7 @@ export class OperationsFinanceService {
       let expenses = 0;
       let discounts = 0;
       let salary = 0;
+      let net = 0;
       let clientCount = 0;
       for (let d = 1; d <= dim; d++) {
         const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
@@ -370,9 +378,10 @@ export class OperationsFinanceService {
         expenses += e.expenses;
         discounts += e.discounts;
         salary += e.salary;
+        net += e.net;
         clientCount += e.clientCount;
       }
-      return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, clientCount };
+      return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount };
     };
 
     const rows = this.buildRows(columns, (col) => aggregateMonth(col.date));
@@ -384,7 +393,7 @@ export class OperationsFinanceService {
         expenses: e.expenses,
         discounts: e.discounts,
         salary: e.salary,
-        net: net(e.revenue, e.expenses, e.discounts, e.salary),
+        net: e.net,
         clientCount: e.clientCount,
       };
     });

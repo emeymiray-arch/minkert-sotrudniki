@@ -35,6 +35,21 @@ export class TasksService {
     );
   }
 
+  /** Все задачи всех сотрудников за неделю (один запрос вместо N). */
+  async listWeekBoard(weekRaw: string) {
+    const mon = startUtcWeekMonday(weekRaw.trim());
+    const sun = addUtcDays(mon, 6);
+    const tasks = await this.prisma.task.findMany({
+      where: { taskDate: { gte: mon, lte: sun } },
+      orderBy: [{ employeeId: 'asc' }, { createdAt: 'asc' }],
+    });
+    const byEmployee: Record<string, typeof tasks> = {};
+    for (const t of tasks) {
+      (byEmployee[t.employeeId] ??= []).push(t);
+    }
+    return byEmployee;
+  }
+
   async list(employeeId: string, weekRaw?: string) {
     await this.ensureEmployee(employeeId);
     const where: Prisma.TaskWhereInput = { employeeId };

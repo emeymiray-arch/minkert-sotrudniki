@@ -424,6 +424,7 @@ export class OperationsController {
       expenses?: number;
       discounts?: number;
       salary?: number;
+      net?: number;
       clientCount?: number;
     },
   ) {

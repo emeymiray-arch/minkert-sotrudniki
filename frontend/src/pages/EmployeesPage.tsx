@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -73,6 +73,7 @@ export default function EmployeesPage() {
   const [editTitle, setEditTitle] = React.useState('');
   const [editDescription, setEditDescription] = React.useState('');
   const [editTaskDate, setEditTaskDate] = React.useState(utcMondayIso());
+  const [employeesTab, setEmployeesTab] = React.useState('board');
   const weekLabels = React.useMemo(() => weekDateLabels(weekAnchor), [weekAnchor]);
 
   const queryString = React.useMemo(() => {
@@ -92,13 +93,12 @@ export default function EmployeesPage() {
 
   const items = employees.data?.items ?? [];
 
-  const boardTasks = useQueries({
-    queries: items.map((employee) => ({
-      queryKey: ['employee-tasks', employee.id, weekAnchor],
-      queryFn: () =>
-        apiJson<Task[]>(`/employees/${employee.id}/tasks?week=${encodeURIComponent(weekAnchor)}`),
-      enabled: items.length > 0,
-    })),
+  const weekTasksBoard = useQuery({
+    queryKey: ['tasks-week-board', weekAnchor],
+    queryFn: () =>
+      apiJson<Record<string, Task[]>>(`/tasks/week-board?week=${encodeURIComponent(weekAnchor)}`),
+    enabled: items.length > 0 && employeesTab === 'board',
+    staleTime: 90_000,
   });
 
   const rolloverWeekAll = useMutation({
@@ -126,18 +126,25 @@ export default function EmployeesPage() {
           description: r.skipped ? 'На следующей неделе уже есть такие названия' : 'На выбранной неделе нет задач',
         });
       }
-      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['tasks-week-board'] });
       await qc.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось перенести'),
   });
 
-  const boardOverviews = useQueries({
-    queries: items.map((employee) => ({
-      queryKey: ['employee-overview', employee.id],
-      queryFn: () => apiJson<EmployeeOverview>(`/analytics/employees/${employee.id}/overview`),
-      enabled: items.length > 0,
-    })),
+  const boardOverviews = useQuery({
+    queryKey: ['employee-overviews-board', items.map((e) => e.id).join(',')],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        items.map(async (employee) => {
+          const overview = await apiJson<EmployeeOverview>(`/analytics/employees/${employee.id}/overview`);
+          return [employee.id, overview] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, EmployeeOverview>;
+    },
+    enabled: items.length > 0 && employeesTab === 'board',
+    staleTime: 120_000,
   });
 
   const createEmployee = useMutation({
@@ -188,7 +195,7 @@ export default function EmployeesPage() {
       }),
     onSuccess: async () => {
       toast.success('Задача создана');
-      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['tasks-week-board'] });
       await qc.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось создать задачу'),
@@ -201,7 +208,7 @@ export default function EmployeesPage() {
         body: JSON.stringify({ days: { [day]: nextStatus(current) } }),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['tasks-week-board'] });
       await qc.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось сохранить балл'),
@@ -221,7 +228,7 @@ export default function EmployeesPage() {
       toast.success('Задача обновлена');
       setEditOpen(false);
       setEditTaskId(null);
-      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['tasks-week-board'] });
       await qc.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось сохранить'),
@@ -231,7 +238,7 @@ export default function EmployeesPage() {
     mutationFn: (taskId: string) => apiJson(`/tasks/${taskId}`, { method: 'DELETE' }),
     onSuccess: async () => {
       toast.success('Задача удалена');
-      await qc.invalidateQueries({ queryKey: ['employee-tasks'] });
+      await qc.invalidateQueries({ queryKey: ['tasks-week-board'] });
       await qc.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось удалить задачу'),
@@ -410,9 +417,8 @@ export default function EmployeesPage() {
         Все сотрудники из текущего списка (с учётом фильтров) — по одному на строку, на всю ширину: задачи, ПН–ВС, аналитика.
       </div>
       {items.map((employee, idx) => {
-        const taskQuery = boardTasks[idx];
-        const overviewQuery = boardOverviews[idx];
-        const taskList = taskQuery?.data ?? [];
+        const taskList = weekTasksBoard.data?.[employee.id] ?? [];
+        const overview = boardOverviews.data?.[employee.id];
         const palette = featuredPalette[idx % featuredPalette.length];
         const canEditThis = canEditTaskDays(user, employee.id);
         const canMeta = canManageTasks(user);
@@ -464,9 +470,9 @@ export default function EmployeesPage() {
                 </div>
 
                 <div className="min-w-0 overflow-x-auto">
-                  {taskQuery?.isLoading ? (
+                  {weekTasksBoard.isLoading && employeesTab === 'board' ?
                     <Skeleton className="h-[120px] w-full min-w-[20rem]" />
-                  ) : (
+                  : (
                     <div className={WEEK_MATRIX_GRID_CLASS}>
                       <div className={DAY_MATRIX_CORNER_CLASS}>
                         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted dark:text-white/45">
@@ -568,26 +574,24 @@ export default function EmployeesPage() {
 
                 <div className="rounded-xl border border-stroke/80 bg-black/14 p-3 text-xs dark:border-white/10 dark:bg-black/35">
                   <div className="mb-2 text-[10px] uppercase tracking-[0.15em] text-muted dark:text-white/55">Аналитика</div>
-                  {overviewQuery?.isLoading ? (
+                  {boardOverviews.isLoading && employeesTab === 'board' ?
                     <Skeleton className="h-8" />
-                  ) : overviewQuery?.data ? (
+                  : overview ?
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       <div className="rounded-lg border border-stroke/60 bg-white/45 px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
-                        Серия: <span className="font-semibold">{overviewQuery.data.streakWeeks}</span>
+                        Серия: <span className="font-semibold">{overview.streakWeeks}</span>
                       </div>
                       <div className="rounded-lg border border-stroke/60 bg-white/45 px-2 py-1.5 dark:border-white/10 dark:bg-white/5">
-                        Месяц: <span className="font-semibold">{overviewQuery.data.monthlyEfficiency.toFixed(1)}%</span>
+                        Месяц: <span className="font-semibold">{overview.monthlyEfficiency.toFixed(1)}%</span>
                       </div>
                       <div className="rounded-lg border border-emerald-400/35 bg-emerald-500/10 px-2 py-1.5">
-                        Рост: <span className="font-semibold">{overviewQuery.data.growthPercent.toFixed(1)}%</span>
+                        Рост: <span className="font-semibold">{overview.growthPercent.toFixed(1)}%</span>
                       </div>
                       <div className="rounded-lg border border-rose-400/35 bg-rose-500/10 px-2 py-1.5">
-                        Спад: <span className="font-semibold">{overviewQuery.data.declinePercent.toFixed(1)}%</span>
+                        Спад: <span className="font-semibold">{overview.declinePercent.toFixed(1)}%</span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-muted dark:text-white/55">Аналитика пока недоступна</div>
-                  )}
+                  : <div className="text-muted dark:text-white/55">Аналитика пока недоступна</div>}
                 </div>
               </div>
             </div>
@@ -696,7 +700,7 @@ export default function EmployeesPage() {
           {employees.isLoading ?
             <Skeleton className="h-[440px]" />
           : <>
-              <Tabs defaultValue="board">
+              <Tabs value={employeesTab} onValueChange={setEmployeesTab}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <TabsList>
                     <TabsTrigger value="board" className="gap-2">
