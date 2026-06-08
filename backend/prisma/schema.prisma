@@ -63,6 +63,8 @@ model Employee {
   opsContentReviews OpsContentReview[]
   opsReports  OpsReportLog[]
   opsCheckEntries OpsTaskCheckEntry[]
+  crmProcedures CrmProcedure[]
+  crmAppointments CrmAppointment[]
 
   @@index([name])
   @@index([status])
@@ -102,6 +104,22 @@ enum OpsReportStatus {
   SUBMITTED
   MISSED
   ERROR
+}
+
+enum CrmClientStatus {
+  RED
+  YELLOW
+  GREEN
+  BLUE
+  BLACK
+}
+
+enum CrmVisitStatus {
+  SCHEDULED
+  ARRIVED
+  NO_SHOW
+  RESCHEDULED
+  CANCELED
 }
 
 enum OpsContentRole {
@@ -320,6 +338,7 @@ model OpsActivityLog {
 model OpsSettings {
   id                    String   @id @default("default")
   googleFormMappings    Json?
+  businessPlans         Json?
   formsWebhookNote      String   @default("")
   updatedAt             DateTime @updatedAt
 }
@@ -376,6 +395,73 @@ model LoyaltyStamp {
 
   @@unique([clientId, slot])
   @@index([clientId, stampedAt])
+}
+
+model CrmClient {
+  id                    String          @id @default(cuid())
+  fullName              String
+  phone                 String          @default("")
+  phoneNormalized       String          @default("")
+  birthDate             DateTime?       @db.Date
+  note                  String          @default("")
+  totalSpent            Int             @default(0)
+  visitsCount           Int             @default(0)
+  lastProcedureAt       DateTime?       @db.Date
+  recommendedNextAt     DateTime?       @db.Date
+  requiresRepeatContact Boolean         @default(false)
+  warned                Boolean         @default(false)
+  status                CrmClientStatus @default(RED)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  procedures            CrmProcedure[]
+  appointments          CrmAppointment[]
+
+  @@index([fullName])
+  @@index([phone])
+  @@index([phoneNormalized])
+  @@index([status, recommendedNextAt])
+  @@index([lastProcedureAt])
+}
+
+model CrmProcedure {
+  id                String    @id @default(cuid())
+  clientId          String
+  client            CrmClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  masterId          String?
+  master            Employee? @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  procedureDate     DateTime  @db.Date
+  service           String
+  cost              Int       @default(0)
+  intervalDays      Int
+  sequenceNumber    Int       @default(1)
+  masterComment     String    @default("")
+  photosBeforeAfter Json?
+  nextVisitDate     DateTime? @db.Date
+  nextVisitComment  String    @default("")
+  nextVisitAdvice   String    @default("")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([clientId, procedureDate])
+  @@index([masterId, procedureDate])
+}
+
+model CrmAppointment {
+  id          String         @id @default(cuid())
+  clientId    String
+  client      CrmClient      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  masterId    String?
+  master      Employee?      @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  service     String
+  startsAt    DateTime
+  comment     String         @default("")
+  visitStatus CrmVisitStatus @default(SCHEDULED)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([masterId, startsAt])
+  @@index([clientId, startsAt])
+  @@index([visitStatus, startsAt])
 }
 
 model Task {

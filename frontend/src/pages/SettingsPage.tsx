@@ -24,8 +24,26 @@ export default function SettingsPage() {
   const [accPassword, setAccPassword] = React.useState('');
   const [accRole, setAccRole] = React.useState<'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY'>('LOYALTY');
   const [accLinkedEmployeeId, setAccLinkedEmployeeId] = React.useState('');
+  const [revenuePlan, setRevenuePlan] = React.useState('');
+  const [clientPlan, setClientPlan] = React.useState('');
 
   const apiHint = getApiBaseUrl();
+  const planMonth = React.useMemo(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  const businessPlan = useQuery({
+    queryKey: ['insights', 'plan', planMonth],
+    queryFn: () => apiJson<{ month: string; revenuePlan?: number; clientPlan?: number }>(`/insights/plan?month=${planMonth}`),
+    enabled: user?.role === 'ADMIN',
+  });
+
+  React.useEffect(() => {
+    if (!businessPlan.data) return;
+    setRevenuePlan(businessPlan.data.revenuePlan ? String(businessPlan.data.revenuePlan) : '');
+    setClientPlan(businessPlan.data.clientPlan ? String(businessPlan.data.clientPlan) : '');
+  }, [businessPlan.data]);
 
   const managerKpi = useQuery({
     queryKey: ['analytics', 'manager-kpi'],
@@ -53,6 +71,20 @@ export default function SettingsPage() {
       toast.success('Профиль управляющего обновлён');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось обновить профиль'),
+  });
+
+  const savePlan = useMutation({
+    mutationFn: () =>
+      apiJson('/insights/plan', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          month: planMonth,
+          revenuePlan: revenuePlan ? Number(revenuePlan) : 0,
+          clientPlan: clientPlan ? Number(clientPlan) : 0,
+        }),
+      }),
+    onSuccess: () => toast.success('План на месяц сохранён'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось сохранить план'),
   });
 
   const createAccount = useMutation({
@@ -194,6 +226,32 @@ export default function SettingsPage() {
           передайте на этапе сборки фронта.
         </div>
       </Card>
+
+      {user?.role === 'ADMIN' ?
+        <Card>
+          <CardHeader
+            title="План / факт"
+            description={`Ручные цели на ${planMonth} — отображаются на главном экране «Обзор».`}
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              type="number"
+              value={revenuePlan}
+              onChange={(e) => setRevenuePlan(e.target.value)}
+              placeholder="План выручки (₽)"
+            />
+            <Input
+              type="number"
+              value={clientPlan}
+              onChange={(e) => setClientPlan(e.target.value)}
+              placeholder="План клиенток"
+            />
+          </div>
+          <Button className="mt-3" disabled={savePlan.isPending} onClick={() => savePlan.mutate()}>
+            Сохранить план
+          </Button>
+        </Card>
+      : null}
 
       {user?.role === 'ADMIN' ?
         <Card>

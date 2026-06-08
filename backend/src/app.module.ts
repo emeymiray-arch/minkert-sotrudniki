@@ -8,6 +8,8 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { AppController } from './app.controller';
 import { EmployeesModule } from './employees/employees.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
+import { CrmModule } from './crm/crm.module';
+import { InsightsModule } from './insights/insights.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { OperationsModule } from './operations/operations.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -22,6 +24,8 @@ import { UsersModule } from './users/users.module';
     AnalyticsModule,
     EmployeesModule,
     LoyaltyModule,
+    CrmModule,
+    InsightsModule,
     TasksModule,
     OperationsModule,
   ],

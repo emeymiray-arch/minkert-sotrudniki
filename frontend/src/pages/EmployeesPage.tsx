@@ -134,15 +134,10 @@ export default function EmployeesPage() {
 
   const boardOverviews = useQuery({
     queryKey: ['employee-overviews-board', items.map((e) => e.id).join(',')],
-    queryFn: async () => {
-      const entries = await Promise.all(
-        items.map(async (employee) => {
-          const overview = await apiJson<EmployeeOverview>(`/analytics/employees/${employee.id}/overview`);
-          return [employee.id, overview] as const;
-        }),
-      );
-      return Object.fromEntries(entries) as Record<string, EmployeeOverview>;
-    },
+    queryFn: () =>
+      apiJson<Record<string, EmployeeOverview>>(
+        `/insights/employees/overviews?ids=${encodeURIComponent(items.map((e) => e.id).join(','))}`,
+      ),
     enabled: items.length > 0 && employeesTab === 'board',
     staleTime: 120_000,
   });

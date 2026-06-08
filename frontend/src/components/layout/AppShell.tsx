@@ -12,59 +12,103 @@ import { useTheme } from '@/context/theme';
 import { cnRoleRu } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-const navItems = [
-  { to: '/', label: 'Обзор', icon: LayoutDashboard, end: true },
-  { to: '/upravlenie', label: 'Контроль', icon: Briefcase, end: false },
-  { to: '/finansy', label: 'Финансы', icon: Wallet, end: false },
-  { to: '/problemy', label: 'Проблемы', icon: CircleAlert, end: false },
-  { to: '/loyalty', label: 'Лояльность', icon: Heart, end: false },
-  { to: '/employees', label: 'Сотрудники', icon: Users2, end: false },
-  { to: '/analytics', label: 'Аналитика', icon: LineChart, end: false },
-  { to: '/settings', label: 'Настройки', icon: Settings2, end: false },
+type NavItem = {
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  end: boolean;
+};
+
+const navGroups: Array<{ label: string; items: NavItem[] }> = [
+  {
+    label: 'Центр',
+    items: [{ to: '/', label: 'Обзор', icon: LayoutDashboard, end: true }],
+  },
+  {
+    label: 'Операции',
+    items: [
+      { to: '/upravlenie', label: 'Контроль', icon: Briefcase, end: false },
+      { to: '/finansy', label: 'Финансы', icon: Wallet, end: false },
+      { to: '/problemy', label: 'Проблемы', icon: CircleAlert, end: false },
+    ],
+  },
+  {
+    label: 'Клиенты',
+    items: [
+      { to: '/crm', label: 'CRM', icon: Users2, end: false },
+      { to: '/loyalty', label: 'Лояльность', icon: Heart, end: false },
+    ],
+  },
+  {
+    label: 'Команда',
+    items: [
+      { to: '/employees', label: 'Сотрудники', icon: Users2, end: false },
+      { to: '/analytics', label: 'Аналитика KPI', icon: LineChart, end: false },
+    ],
+  },
+  {
+    label: 'Система',
+    items: [{ to: '/settings', label: 'Настройки', icon: Settings2, end: false }],
+  },
 ];
+
+const navItems = navGroups.flatMap((g) => g.items);
 
 function navItemsForRole(role?: UserRole) {
   if (role === 'LOYALTY') {
-    return navItems.filter((item) => item.to === '/loyalty');
+    return navItems.filter((item) => item.to === '/loyalty' || item.to === '/crm');
   }
   return navItems;
 }
 
 function SidebarNav({ role, onNavigate }: { role?: UserRole; onNavigate?: () => void }) {
-  const items = navItemsForRole(role);
+  const allowed = new Set(navItemsForRole(role).map((i) => i.to));
   return (
-    <nav className="flex flex-col gap-0.5 px-3">
-      {items.map((item) => {
-        const Icon = item.icon;
+    <nav className="flex flex-col gap-4 px-3">
+      {navGroups.map((group) => {
+        const items = group.items.filter((item) => allowed.has(item.to));
+        if (!items.length) return null;
         return (
-          <NavLink
-            key={item.to}
-            end={item.end}
-            to={item.to}
-            onClick={() => onNavigate?.()}
-            className={({ isActive }) =>
-              cn(
-                'group relative flex items-center gap-3 rounded-lg px-3 py-2 pl-3.5 text-[13px] font-medium transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring-focus)/0.35)]',
-                isActive ?
-                  'bg-black/[0.06] text-zinc-900 dark:bg-white/[0.08] dark:text-white'
-                : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900 dark:text-white/55 dark:hover:bg-white/[0.05] dark:hover:text-white',
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span
-                  className={cn(
-                    'absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full transition-colors',
-                    isActive ? 'bg-accent' : 'bg-transparent group-hover:bg-zinc-300 dark:group-hover:bg-white/25',
-                  )}
-                />
-                <Icon className="size-[18px] shrink-0 opacity-80" aria-hidden />
-                <span>{item.label}</span>
-              </>
-            )}
-          </NavLink>
+          <div key={group.label}>
+            <div className="mb-1 px-3.5 text-[10px] font-semibold uppercase tracking-wider text-muted dark:text-white/35">
+              {group.label}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    end={item.end}
+                    to={item.to}
+                    onClick={() => onNavigate?.()}
+                    className={({ isActive }) =>
+                      cn(
+                        'group relative flex items-center gap-3 rounded-lg px-3 py-2 pl-3.5 text-[13px] font-medium transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring-focus)/0.35)]',
+                        isActive ?
+                          'bg-black/[0.06] text-zinc-900 dark:bg-white/[0.08] dark:text-white'
+                        : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900 dark:text-white/55 dark:hover:bg-white/[0.05] dark:hover:text-white',
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          className={cn(
+                            'absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full transition-colors',
+                            isActive ? 'bg-accent' : 'bg-transparent group-hover:bg-zinc-300 dark:group-hover:bg-white/25',
+                          )}
+                        />
+                        <Icon className="size-[18px] shrink-0 opacity-80" aria-hidden />
+                        <span>{item.label}</span>
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </nav>

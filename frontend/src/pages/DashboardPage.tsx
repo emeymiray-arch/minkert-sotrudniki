@@ -1,204 +1,259 @@
-import { Zap } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, Briefcase, Heart, LineChart, Users2, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+import { AiInsightCard } from '@/components/insights/AiInsightCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { utcMondayIso } from '@/lib/date';
 import { apiJson } from '@/lib/http';
-import type { EmployeeListItem, ManagerKpiSummary, TeamDashboard } from '@/lib/types';
 
-function NameList({ ids, items }: { ids: string[]; items: EmployeeListItem[] }) {
-  const map = new Map(items.map((e) => [e.id, e.name]));
+type UnifiedDashboard = {
+  asOf: string;
+  business: {
+    revenueToday: number;
+    revenueWeek: number;
+    revenueMonth: number;
+    revenuePlan: number;
+    clientPlan: number;
+    planMonth: string;
+    planCompletionRevenue: number;
+    planCompletionClients: number;
+    weekRevenueTrend: number;
+    netMonth: number;
+    expensesMonth: number;
+  };
+  clients: {
+    crmTotal: number;
+    newThisMonth: number;
+    loyaltyTotal: number;
+    loyaltyActive30d: number;
+    repeatDue: number;
+    crmRevenueMonth: number;
+    noShows: number;
+    arrived: number;
+  };
+  employees: {
+    teamKpi: number;
+    weekTrend: number;
+    bestName: string;
+    bestKpi: number;
+    atRiskCount: number;
+    managerKpi: number;
+    activeCount: number;
+  };
+  control: {
+    totalTasks: number;
+    done: number;
+    overdue: number;
+    completionPercent: number;
+    problemsOpen: number;
+    needsAttention: number;
+  };
+  loyalty: {
+    totalClients: number;
+    active30d: number;
+    index: number;
+  };
+};
 
+function money(n: number) {
+  return n.toLocaleString('ru-RU');
+}
+
+function Metric({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: 'good' | 'warn' | 'bad';
+}) {
+  const toneClass =
+    tone === 'good' ? 'text-emerald-600 dark:text-emerald-400'
+    : tone === 'warn' ? 'text-amber-600 dark:text-amber-400'
+    : tone === 'bad' ? 'text-rose-600 dark:text-rose-400'
+    : 'text-zinc-900 dark:text-white';
   return (
-    <div className="divide-y divide-stroke overflow-hidden rounded-lg border border-stroke dark:divide-white/[0.06] dark:border-white/[0.06]">
-      {ids.map((id) => (
-        <div key={id} className="bg-[hsl(var(--panel))] px-3 py-2.5 text-[13px] font-medium text-zinc-900 dark:text-white">
-          {map.get(id) ?? id.slice(0, 8)}
-        </div>
-      ))}
-      {ids.length === 0 ?
-        <div className="px-3 py-8 text-center text-[13px] text-muted dark:text-white/45">Нет записей</div>
-      : null}
+    <div>
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted dark:text-white/45">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
+      {hint ? <div className="mt-1 text-xs text-muted dark:text-white/50">{hint}</div> : null}
     </div>
   );
 }
 
+function SectionLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link to={to} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+      {label}
+      <ArrowRight className="size-3" />
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
-  const anchor = utcMondayIso();
-
-  const dashboard = useQuery({
-    queryKey: ['analytics', 'dashboard', anchor],
-    queryFn: () => apiJson<TeamDashboard>(`/analytics/dashboard?weekAnchor=${anchor}`),
+  const dash = useQuery({
+    queryKey: ['insights', 'dashboard'],
+    queryFn: () => apiJson<UnifiedDashboard>('/insights/dashboard'),
+    staleTime: 120_000,
   });
 
-  const managerKpi = useQuery({
-    queryKey: ['analytics', 'manager-kpi'],
-    queryFn: () => apiJson<ManagerKpiSummary>('/analytics/manager-kpi'),
-    refetchOnWindowFocus: true,
-  });
-
-  const employees = useQuery({
-    queryKey: ['employees'],
-    queryFn: async () => apiJson<{ items: EmployeeListItem[] }>(`/employees?sort=nameAsc&weekAnchor=${encodeURIComponent(anchor)}`),
-  });
-
-  const lineData =
-    dashboard.data ?
-      [
-        { stage: 'Сегодня', kpi: dashboard.data.teamAvgEfficiency },
-        { stage: '+ WoW модель', kpi: Math.max(0, dashboard.data.teamAvgEfficiency + dashboard.data.weekOverWeekTrend) },
-      ]
-    : [];
+  const d = dash.data;
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Обзор"
+        title="Центр управления"
         description={
           <span className="flex flex-wrap items-center gap-2">
-            Ваш KPI считается автоматически из чек-листов сотрудников (день / неделя / месяц).
-            {managerKpi.data ?
-              <Badge tone="neutral">На {managerKpi.data.asOf}</Badge>
-            : null}
+            Состояние бизнеса за 10–15 секунд: финансы, клиенты, команда, контроль и лояльность.
+            {d ? <Badge tone="neutral">На {d.asOf}</Badge> : null}
           </span>
         }
         actions={
           <>
             <Button variant="outline" asChild>
-              <Link to="/employees">Сотрудники</Link>
+              <Link to="/finansy">Финансы</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/analytics">Аналитика</Link>
+              <Link to="/crm">CRM</Link>
             </Button>
             <Button asChild>
-              <Link to="/employees">Задачи</Link>
+              <Link to="/upravlenie">Контроль</Link>
             </Button>
           </>
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {managerKpi.isLoading ?
-          <>
-            <Skeleton className="h-[120px]" />
-            <Skeleton className="h-[120px]" />
-            <Skeleton className="h-[120px]" />
-          </>
-        : managerKpi.data ?
-          <>
-            <Card>
-              <CardHeader title={managerKpi.data.daily.label} description={`${managerKpi.data.daily.weekday} · из отметок чек-листов`} />
-              <div className="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.daily.kpi.toFixed(1)}%</div>
-            </Card>
-            <Card>
-              <CardHeader title={managerKpi.data.weekly.label} description="Среднее по команде за неделю" />
-              <div className="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.weekly.kpi.toFixed(1)}%</div>
-              <div className="mt-2 text-[13px] text-muted dark:text-white/50">
-                К прошлой неделе:{` `}
-                <strong className="text-zinc-900 dark:text-white">
-                  {managerKpi.data.weekly.weekOverWeekTrend >= 0 ? '+' : ''}
-                  {managerKpi.data.weekly.weekOverWeekTrend.toFixed(2)} п.п.
-                </strong>
-              </div>
-            </Card>
-            <Card>
-              <CardHeader title={managerKpi.data.monthly.label} description={`${managerKpi.data.month} · все задачи месяца`} />
-              <div className="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.monthly.kpi.toFixed(1)}%</div>
-            </Card>
-          </>
-        : null}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-12">
-        <Card className="xl:col-span-4">
-          <CardHeader title="Командное KPI" description="То же, что недельный показатель выше — для сравнения с прошлой неделей." />
-          {dashboard.isLoading ?
-            <Skeleton className="h-[164px]" />
-          : <>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <div className="text-5xl font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-white">
-                    {(dashboard.data?.teamAvgEfficiency ?? 0).toFixed(1)}
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 text-[13px] text-muted dark:text-white/50">
-                    <Zap className="size-4 text-accent" />
-                    <span>
-                      Неделя к неделе:{` `}
-                      <strong className="font-semibold text-zinc-900 dark:text-white">
-                        {(dashboard.data?.weekOverWeekTrend ?? 0) >= 0 ? '+' : ''}
-                        {(dashboard.data?.weekOverWeekTrend ?? 0).toFixed(2)} п.п.
-                      </strong>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="h-[120px] w-full sm:w-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={lineData}>
-                      <CartesianGrid strokeDasharray="4 12" opacity={0.2} stroke="currentColor" className="text-stroke dark:text-white/10" />
-                      <XAxis dataKey="stage" stroke="transparent" hide />
-                      <YAxis stroke="transparent" hide domain={[0, 115]} />
-                      <Tooltip formatter={(value: unknown) => [`${Number(value ?? 0).toFixed(2)}`, '']} />
-                      <Line type="monotone" dataKey="kpi" strokeWidth={2.5} stroke="hsl(var(--accent))" dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </>
-          }
+      {dash.isLoading ?
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
+        </div>
+      : !d ?
+        <Card>
+          <CardHeader title="Нет данных" description="Не удалось загрузить сводку." />
         </Card>
-
-        <Card className="xl:col-span-8">
-          <CardHeader title="Команда по KPI" description="Лидеры, зоны внимания и задачи с наименьшей эффективностью." />
-          {!dashboard.data || employees.isLoading ?
-            <Skeleton className="h-[240px]" />
-          : <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted dark:text-white/40">Лидируют</div>
-                <NameList ids={dashboard.data.best.map((x) => x.employeeId)} items={employees.data?.items ?? []} />
+      : <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Card>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <CardHeader title="Бизнес" description="Выручка и план/факт" />
+                <SectionLink to="/finansy" label="Финансы" />
               </div>
-              <div>
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted dark:text-white/40">Нужно внимание</div>
-                <NameList ids={dashboard.data.atRiskEmployees.map((x) => x.employeeId)} items={employees.data?.items ?? []} />
+              <div className="grid grid-cols-2 gap-4">
+                <Metric label="Сегодня" value={`${money(d.business.revenueToday)} ₽`} />
+                <Metric label="Неделя" value={`${money(d.business.revenueWeek)} ₽`} hint={`${d.business.weekRevenueTrend >= 0 ? '+' : ''}${d.business.weekRevenueTrend}% к прошлой`} />
+                <Metric label="Месяц" value={`${money(d.business.revenueMonth)} ₽`} />
+                <Metric
+                  label="План / факт"
+                  value={d.business.revenuePlan ? `${d.business.planCompletionRevenue}%` : '—'}
+                  hint={d.business.revenuePlan ? `план ${money(d.business.revenuePlan)} ₽` : 'задайте план в настройках'}
+                  tone={d.business.planCompletionRevenue >= 100 ? 'good' : d.business.planCompletionRevenue >= 70 ? 'warn' : undefined}
+                />
               </div>
+            </Card>
 
-              <div className="md:col-span-2">
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted dark:text-white/40">Слабые задачи</div>
-                <div className="overflow-hidden rounded-lg border border-stroke dark:border-white/[0.06]">
-                  {dashboard.data.lowPerformingTasks.length === 0 ?
-                    <div className="bg-[hsl(var(--panel))] px-3 py-8 text-center text-[13px] text-muted dark:text-white/45">
-                      Все задачи в норме.
-                    </div>
-                  : <div className="divide-y divide-stroke dark:divide-white/[0.06]">
-                      {dashboard.data.lowPerformingTasks.slice(0, 14).map((t) => (
-                        <Link
-                          key={t.id}
-                          className="block bg-[hsl(var(--panel))] px-3 py-2.5 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
-                          to="/employees"
-                        >
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="truncate text-[13px] font-medium text-zinc-900 dark:text-white">{t.title}</div>
-                              <div className="truncate text-xs text-muted dark:text-white/45">{t.employeeName}</div>
-                            </div>
-                            <Badge tone="warning">{`${t.weeklyEfficiency.toFixed(1)}%`}</Badge>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  }
-                </div>
+            <Card>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <CardHeader title="Клиенты" description="CRM и повторные записи" />
+                <SectionLink to="/crm" label="CRM" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Metric label="В CRM" value={String(d.clients.crmTotal)} />
+                <Metric label="Новые / месяц" value={String(d.clients.newThisMonth)} />
+                <Metric label="Повторный контакт" value={String(d.clients.repeatDue)} tone={d.clients.repeatDue > 0 ? 'warn' : 'good'} />
+                <Metric label="Неявки" value={String(d.clients.noShows)} tone={d.clients.noShows > 5 ? 'bad' : undefined} />
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <CardHeader title="Сотрудники" description="KPI команды" />
+                <SectionLink to="/employees" label="Команда" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Metric label="KPI недели" value={`${d.employees.teamKpi.toFixed(1)}%`} hint={`${d.employees.weekTrend >= 0 ? '+' : ''}${d.employees.weekTrend.toFixed(1)} п.п.`} />
+                <Metric label="Лучший" value={d.employees.bestName} hint={`${d.employees.bestKpi.toFixed(1)}%`} />
+                <Metric label="В зоне риска" value={String(d.employees.atRiskCount)} tone={d.employees.atRiskCount > 0 ? 'warn' : 'good'} />
+                <Metric label="Активных" value={String(d.employees.activeCount)} />
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <CardHeader title="Контроль" description="Задачи управляющего" />
+                <SectionLink to="/upravlenie" label="Контроль" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Metric label="Всего задач" value={String(d.control.totalTasks)} />
+                <Metric label="Выполнено" value={`${d.control.completionPercent}%`} tone={d.control.completionPercent >= 80 ? 'good' : 'warn'} />
+                <Metric label="Просрочено" value={String(d.control.overdue)} tone={d.control.overdue > 0 ? 'bad' : 'good'} />
+                <Metric label="Проблемы" value={String(d.control.problemsOpen)} tone={d.control.problemsOpen > 0 ? 'warn' : undefined} />
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <CardHeader title="Лояльность" description="Активность программы" />
+                <SectionLink to="/loyalty" label="Лояльность" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Metric label="Клиентов" value={String(d.loyalty.totalClients)} />
+                <Metric label="Активны 30 дн." value={String(d.loyalty.active30d)} />
+                <Metric label="Индекс" value={`${d.loyalty.index}%`} hint="доля активных за месяц" />
+                <Metric label="CRM выручка" value={`${money(d.clients.crmRevenueMonth)} ₽`} hint="по процедурам" />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader title="Быстрые разделы" description="Глубже в детали" />
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { to: '/finansy', label: 'Финансы', icon: Wallet },
+                  { to: '/crm', label: 'CRM', icon: Users2 },
+                  { to: '/upravlenie', label: 'Контроль', icon: Briefcase },
+                  { to: '/analytics', label: 'Аналитика KPI', icon: LineChart },
+                  { to: '/loyalty', label: 'Лояльность', icon: Heart },
+                  { to: '/problemy', label: 'Проблемы', icon: Briefcase },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className="flex items-center gap-2 rounded-lg border border-stroke px-3 py-2 text-[13px] font-medium transition-colors hover:bg-black/[0.03] dark:border-white/[0.08] dark:hover:bg-white/[0.04]"
+                    >
+                      <Icon className="size-4 opacity-70" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+
+          <div>
+            <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">AI-анализ</h2>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <AiInsightCard title="AI-Директор" endpoint="/insights/ai/director" description="Сводные выводы по всем направлениям" />
+              <AiInsightCard title="AI Финансист" endpoint="/insights/ai/finance" />
+              <AiInsightCard title="AI HR" endpoint="/insights/ai/hr" />
+              <AiInsightCard title="AI Маркетолог" endpoint="/insights/ai/marketing" />
+              <div className="lg:col-span-2">
+                <AiInsightCard title="AI Операционный" endpoint="/insights/ai/operations" />
               </div>
             </div>
-          }
-        </Card>
-      </div>
+          </div>
+        </>
+      }
     </div>
   );
 }

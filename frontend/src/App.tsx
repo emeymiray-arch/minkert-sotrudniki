@@ -1,30 +1,46 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as React from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { ThemeProvider } from '@/context/theme';
-import AnalyticsPage from '@/pages/AnalyticsPage';
-import DashboardPage from '@/pages/DashboardPage';
-import EmployeeDetailPage from '@/pages/EmployeeDetailPage';
-import EmployeesPage from '@/pages/EmployeesPage';
-import LoginPage from '@/pages/LoginPage';
-import LoyaltyPage from '@/pages/LoyaltyPage';
-import PublicDiaryPage from '@/pages/PublicDiaryPage';
-import PublicEmployeeTasksPage from '@/pages/PublicEmployeeTasksPage';
-import SettingsPage from '@/pages/SettingsPage';
-import { OpsLayout } from '@/operations/layout/OpsLayout';
-import OpsAnalyticsPage from '@/operations/pages/OpsAnalyticsPage';
-import FinancePage from '@/pages/FinancePage';
-import OpsBlockPage from '@/operations/pages/OpsBlockPage';
-import OpsContentPage from '@/operations/pages/OpsContentPage';
-import OpsSettingsPage from '@/operations/pages/OpsSettingsPage';
-import OpsStaffDetailPage from '@/operations/pages/OpsStaffDetailPage';
-import OpsStaffPage from '@/operations/pages/OpsStaffPage';
-import OpsJournalPage from '@/operations/pages/OpsJournalPage';
-import OpsProblemsPage from '@/operations/pages/OpsProblemsPage';
-import OpsViolationsPage from '@/operations/pages/OpsViolationsPage';
+
+const DashboardPage = React.lazy(() => import('@/pages/DashboardPage'));
+const EmployeesPage = React.lazy(() => import('@/pages/EmployeesPage'));
+const EmployeeDetailPage = React.lazy(() => import('@/pages/EmployeeDetailPage'));
+const AnalyticsPage = React.lazy(() => import('@/pages/AnalyticsPage'));
+const FinancePage = React.lazy(() => import('@/pages/FinancePage'));
+const LoyaltyPage = React.lazy(() => import('@/pages/LoyaltyPage'));
+const CrmPage = React.lazy(() => import('@/pages/CrmPage'));
+const SettingsPage = React.lazy(() => import('@/pages/SettingsPage'));
+const LoginPage = React.lazy(() => import('@/pages/LoginPage'));
+const PublicDiaryPage = React.lazy(() => import('@/pages/PublicDiaryPage'));
+const PublicEmployeeTasksPage = React.lazy(() => import('@/pages/PublicEmployeeTasksPage'));
+const OpsLayout = React.lazy(() => import('@/operations/layout/OpsLayout').then((m) => ({ default: m.OpsLayout })));
+const OpsAnalyticsPage = React.lazy(() => import('@/operations/pages/OpsAnalyticsPage'));
+const OpsBlockPage = React.lazy(() => import('@/operations/pages/OpsBlockPage'));
+const OpsContentPage = React.lazy(() => import('@/operations/pages/OpsContentPage'));
+const OpsSettingsPage = React.lazy(() => import('@/operations/pages/OpsSettingsPage'));
+const OpsStaffDetailPage = React.lazy(() => import('@/operations/pages/OpsStaffDetailPage'));
+const OpsStaffPage = React.lazy(() => import('@/operations/pages/OpsStaffPage'));
+const OpsJournalPage = React.lazy(() => import('@/operations/pages/OpsJournalPage'));
+const OpsProblemsPage = React.lazy(() => import('@/operations/pages/OpsProblemsPage'));
+const OpsViolationsPage = React.lazy(() => import('@/operations/pages/OpsViolationsPage'));
+
+function PageFallback() {
+  return (
+    <div className="space-y-3">
+      <Skeleton className="h-10 w-48" />
+      <Skeleton className="h-[280px] w-full" />
+    </div>
+  );
+}
+
+function Lazy({ children }: { children: React.ReactNode }) {
+  return <React.Suspense fallback={<PageFallback />}>{children}</React.Suspense>;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,8 +72,8 @@ function ProtectedLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.role === 'LOYALTY' && pathname !== '/loyalty') {
-    return <Navigate to="/loyalty" replace />;
+  if (user?.role === 'LOYALTY' && pathname !== '/loyalty' && !pathname.startsWith('/crm')) {
+    return <Navigate to="/crm" replace />;
   }
 
   return (
@@ -73,36 +89,212 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/d/:token" element={<PublicDiaryPage />} />
-            <Route path="/t/:token" element={<PublicEmployeeTasksPage />} />
+            <Route
+              path="/login"
+              element={
+                <Lazy>
+                  <LoginPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="/d/:token"
+              element={
+                <Lazy>
+                  <PublicDiaryPage />
+                </Lazy>
+              }
+            />
+            <Route
+              path="/t/:token"
+              element={
+                <Lazy>
+                  <PublicEmployeeTasksPage />
+                </Lazy>
+              }
+            />
 
             <Route element={<ProtectedLayout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="/employees" element={<EmployeesPage />} />
-              <Route path="/employees/:id" element={<EmployeeDetailPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/finansy" element={<FinancePage />} />
-              <Route path="/problemy" element={<OpsProblemsPage />} />
-              <Route path="/loyalty" element={<LoyaltyPage />} />
+              <Route
+                index
+                element={
+                  <Lazy>
+                    <DashboardPage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/employees"
+                element={
+                  <Lazy>
+                    <EmployeesPage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/employees/:id"
+                element={
+                  <Lazy>
+                    <EmployeeDetailPage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/analytics"
+                element={
+                  <Lazy>
+                    <AnalyticsPage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/finansy"
+                element={
+                  <Lazy>
+                    <FinancePage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/problemy"
+                element={
+                  <Lazy>
+                    <OpsProblemsPage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/loyalty"
+                element={
+                  <Lazy>
+                    <LoyaltyPage />
+                  </Lazy>
+                }
+              />
+              <Route
+                path="/crm"
+                element={
+                  <Lazy>
+                    <CrmPage />
+                  </Lazy>
+                }
+              />
               <Route path="/upravlenie/finansy" element={<Navigate to="/finansy" replace />} />
               <Route path="/upravlenie/problemy" element={<Navigate to="/problemy" replace />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route
+                path="/settings"
+                element={
+                  <Lazy>
+                    <SettingsPage />
+                  </Lazy>
+                }
+              />
 
-              <Route path="/upravlenie" element={<OpsLayout />}>
+              <Route
+                path="/upravlenie"
+                element={
+                  <Lazy>
+                    <OpsLayout />
+                  </Lazy>
+                }
+              >
                 <Route index element={<Navigate to="/upravlenie/utro" replace />} />
-                <Route path="utro" element={<OpsBlockPage />} />
-                <Route path="den" element={<OpsBlockPage />} />
-                <Route path="vecher" element={<OpsBlockPage />} />
-                <Route path="sleduyushchiy-den" element={<OpsBlockPage />} />
-                <Route path="nedelya" element={<OpsBlockPage />} />
-                <Route path="sotrudniki" element={<OpsStaffPage />} />
-                <Route path="sotrudniki/:id" element={<OpsStaffDetailPage />} />
-                <Route path="zhurnal" element={<OpsJournalPage />} />
-                <Route path="narusheniya" element={<OpsViolationsPage />} />
-                <Route path="kontent" element={<OpsContentPage />} />
-                <Route path="analitika" element={<OpsAnalyticsPage />} />
-                <Route path="nastroyki" element={<OpsSettingsPage />} />
+                <Route
+                  path="utro"
+                  element={
+                    <Lazy>
+                      <OpsBlockPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="den"
+                  element={
+                    <Lazy>
+                      <OpsBlockPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="vecher"
+                  element={
+                    <Lazy>
+                      <OpsBlockPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="sleduyushchiy-den"
+                  element={
+                    <Lazy>
+                      <OpsBlockPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="nedelya"
+                  element={
+                    <Lazy>
+                      <OpsBlockPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="sotrudniki"
+                  element={
+                    <Lazy>
+                      <OpsStaffPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="sotrudniki/:id"
+                  element={
+                    <Lazy>
+                      <OpsStaffDetailPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="zhurnal"
+                  element={
+                    <Lazy>
+                      <OpsJournalPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="narusheniya"
+                  element={
+                    <Lazy>
+                      <OpsViolationsPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="kontent"
+                  element={
+                    <Lazy>
+                      <OpsContentPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="analitika"
+                  element={
+                    <Lazy>
+                      <OpsAnalyticsPage />
+                    </Lazy>
+                  }
+                />
+                <Route
+                  path="nastroyki"
+                  element={
+                    <Lazy>
+                      <OpsSettingsPage />
+                    </Lazy>
+                  }
+                />
               </Route>
             </Route>
 

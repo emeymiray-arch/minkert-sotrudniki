@@ -1,0 +1,122 @@
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { JwtUserPayload } from '../auth/types/jwt-user';
+import { CrmService } from './crm.service';
+
+@Controller('crm')
+@Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.LOYALTY)
+export class CrmController {
+  constructor(private readonly crm: CrmService) {}
+
+  @Get('clients')
+  listClients(
+    @Query('q') q?: string,
+    @Query('phone') phone?: string,
+    @CurrentUser() user?: JwtUserPayload,
+  ) {
+    return this.crm.listClients(q, phone, user);
+  }
+
+  @Get('clients/:id')
+  getClient(@Param('id') id: string) {
+    return this.crm.getClient(id);
+  }
+
+  @Post('clients')
+  @Roles(UserRole.ADMIN)
+  createClient(
+    @Body() body: { fullName: string; phone?: string; birthDate?: string; note?: string },
+  ) {
+    return this.crm.createClient(body);
+  }
+
+  @Patch('clients/:id')
+  @Roles(UserRole.ADMIN)
+  patchClient(
+    @Param('id') id: string,
+    @Body() body: Partial<{ fullName: string; phone: string; birthDate: string | null; note: string; status: CrmClientStatus; warned: boolean }>,
+  ) {
+    return this.crm.updateClient(id, body);
+  }
+
+  @Post('clients/:id/procedures')
+  @Roles(UserRole.ADMIN)
+  addProcedure(
+    @CurrentUser() user: JwtUserPayload,
+    @Param('id') id: string,
+    @Body()
+    body: {
+      masterId?: string | null;
+      procedureDate: string;
+      service: string;
+      cost: number;
+      intervalDays: number;
+      masterComment?: string;
+      photosBeforeAfter?: unknown;
+      nextVisitDate?: string;
+      nextVisitComment?: string;
+      nextVisitAdvice?: string;
+    },
+  ) {
+    return this.crm.addProcedure(user, id, body);
+  }
+
+  @Post('appointments')
+  @Roles(UserRole.ADMIN)
+  createAppointment(
+    @Body()
+    body: { clientId: string; masterId?: string | null; service: string; startsAt: string; comment?: string },
+  ) {
+    return this.crm.createAppointment(body);
+  }
+
+  @Get('appointments')
+  listAppointments(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('masterId') masterId?: string,
+    @CurrentUser() user?: JwtUserPayload,
+  ) {
+    return this.crm.listAppointments(from, to, masterId, user);
+  }
+
+  @Patch('appointments/:id/status')
+  @Roles(UserRole.ADMIN)
+  setAppointmentStatus(
+    @Param('id') id: string,
+    @Body() body: { visitStatus: CrmVisitStatus },
+  ) {
+    if (!Object.values(CrmVisitStatus).includes(body.visitStatus)) {
+      throw new BadRequestException('Некорректный статус посещения');
+    }
+    return this.crm.updateAppointmentStatus(id, body.visitStatus);
+  }
+
+  @Get('intervals')
+  intervals(
+    @Query('q') q?: string,
+    @CurrentUser() user?: JwtUserPayload,
+  ) {
+    return this.crm.listIntervals(q, user);
+  }
+
+  @Get('repeat-needed')
+  repeatNeeded(
+    @Query('q') q?: string,
+    @CurrentUser() user?: JwtUserPayload,
+  ) {
+    return this.crm.dueForRepeat(q, user);
+  }
+
+  @Get('lost')
+  lost(@Query('days') days?: string) {
+    return this.crm.lostClients(days ? Number(days) : 90);
+  }
+
+  @Get('analytics')
+  analytics() {
+    return this.crm.analytics();
+  }
+}
