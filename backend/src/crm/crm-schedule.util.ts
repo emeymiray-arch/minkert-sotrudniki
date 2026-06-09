@@ -34,3 +34,9 @@ export function appointmentOverlapsSlot(
   const apptEnd = new Date(apptStart.getTime() + durationMin * 60_000);
   return apptStart < slotFinish && apptEnd > slotStart;
 }
+
+/** Запись показываем только в слоте, где она начинается (без дубля в следующем часе). */
+export function appointmentStartsInSlot(slotStart: Date, apptStart: Date): boolean {
+  const slotFinish = slotEnd(slotStart);
+  return apptStart >= slotStart && apptStart < slotFinish;
+}

@@ -14,6 +14,7 @@ import {
 import {
   APPOINTMENT_DURATION_MINUTES,
   appointmentOverlapsSlot,
+  appointmentStartsInSlot,
   buildDaySlotStarts,
   formatSlotLabel,
   parseScheduleDate,
@@ -206,33 +207,44 @@ export class CrmService {
       const masterAppts = appointments.filter((a) => a.masterId === master.id);
       const slots = slotStarts.map((slotStart) => {
         const overlaps = (a: (typeof masterAppts)[number]) => appointmentOverlapsSlot(slotStart, a.startsAt);
+        const startsHere = (a: (typeof masterAppts)[number]) => appointmentStartsInSlot(slotStart, a.startsAt);
         const hit =
-          masterAppts.find((a) => BLOCKING_VISIT_STATUSES.includes(a.visitStatus) && overlaps(a)) ??
-          masterAppts.find((a) => a.visitStatus === CrmVisitStatus.CANCELED && overlaps(a));
-        if (!hit) {
+          masterAppts.find((a) => BLOCKING_VISIT_STATUSES.includes(a.visitStatus) && startsHere(a)) ??
+          masterAppts.find((a) => a.visitStatus === CrmVisitStatus.CANCELED && startsHere(a));
+        if (hit) {
+          const canceled = hit.visitStatus === CrmVisitStatus.CANCELED;
           return {
             time: slotStart.toISOString(),
             label: formatSlotLabel(slotStart),
-            status: 'free' as const,
+            status: canceled ? ('canceled' as const) : ('busy' as const),
+            appointment: {
+              id: hit.id,
+              clientId: hit.client.id,
+              startsAt: hit.startsAt.toISOString(),
+              service: hit.service,
+              clientName: hit.client.fullName,
+              clientPhone: hit.client.phone,
+              clientStatus: hit.client.status,
+              clientVisitsCount: hit.client.visitsCount,
+              masterName: hit.master?.name ?? '—',
+              visitStatus: hit.visitStatus,
+            },
           };
         }
-        const canceled = hit.visitStatus === CrmVisitStatus.CANCELED;
+        const occupied = masterAppts.some(
+          (a) => BLOCKING_VISIT_STATUSES.includes(a.visitStatus) && overlaps(a) && !startsHere(a),
+        );
+        if (occupied) {
+          return {
+            time: slotStart.toISOString(),
+            label: formatSlotLabel(slotStart),
+            status: 'occupied' as const,
+          };
+        }
         return {
           time: slotStart.toISOString(),
           label: formatSlotLabel(slotStart),
-          status: canceled ? ('canceled' as const) : ('busy' as const),
-          appointment: {
-            id: hit.id,
-            clientId: hit.client.id,
-            startsAt: hit.startsAt.toISOString(),
-            service: hit.service,
-            clientName: hit.client.fullName,
-            clientPhone: hit.client.phone,
-            clientStatus: hit.client.status,
-            clientVisitsCount: hit.client.visitsCount,
-            masterName: hit.master?.name ?? '—',
-            visitStatus: hit.visitStatus,
-          },
+          status: 'free' as const,
         };
       });
       return { ...master, slots };
