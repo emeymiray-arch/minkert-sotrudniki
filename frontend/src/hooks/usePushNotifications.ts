@@ -13,14 +13,23 @@ function urlBase64ToUint8Array(base64: string) {
   return out;
 }
 
+function pushSupported() {
+  return (
+    typeof window !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    typeof Notification !== 'undefined'
+  );
+}
+
 export function usePushNotifications() {
   const { user, isAuthenticated } = useAuth();
   const triedRef = React.useRef(false);
 
   const subscribe = React.useCallback(async () => {
     if (!isAuthenticated || !user) return false;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      toast.error('Браузер не поддерживает push-уведомления');
+    if (!pushSupported()) {
+      toast.message('Push недоступен в этом браузере');
       return false;
     }
     try {
@@ -62,9 +71,10 @@ export function usePushNotifications() {
   React.useEffect(() => {
     if (!isAuthenticated || !user || triedRef.current) return;
     if (!['ADMIN', 'MANAGER', 'MASTER'].includes(user.role)) return;
+    if (!pushSupported()) return;
     triedRef.current = true;
     if (Notification.permission === 'granted') {
-      void subscribe();
+      void subscribe().catch(() => undefined);
     }
   }, [isAuthenticated, user, subscribe]);
 

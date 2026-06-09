@@ -3,6 +3,8 @@ import * as React from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
+import { isManagerPath } from '@/lib/role-home';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { ThemeProvider } from '@/context/theme';
@@ -80,15 +82,16 @@ function ProtectedLayout() {
     return <Navigate to="/crm" replace />;
   }
 
-  const managerPaths = ['/crm', '/loyalty', '/finansy'];
-  if (user?.role === 'MANAGER' && !managerPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  if (user?.role === 'MANAGER' && !isManagerPath(pathname)) {
     return <Navigate to="/crm" replace />;
   }
 
   return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <ErrorBoundary>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </ErrorBoundary>
   );
 }
 

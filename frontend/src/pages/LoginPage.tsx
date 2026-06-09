@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth';
+import { homePathForRole } from '@/lib/role-home';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -19,9 +20,9 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      await login(email.trim(), password);
+      const u = await login(email.trim(), password);
       toast.success('Добро пожаловать');
-      navigate('/');
+      navigate(homePathForRole(u.role));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Не удалось войти';
       toast.error(msg);

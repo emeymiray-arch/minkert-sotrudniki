@@ -14,7 +14,7 @@ import type { AuthUser } from '@/lib/types';
 type AuthContextValue = {
   user: AuthUser | null;
   booting: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   setUserProfile: (user: AuthUser) => void;
   isAuthenticated: boolean;
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = React.useCallback(async (email: string, password: string) => {
     const u = await loginApi(email, password);
     setUser(u);
+    return u;
   }, []);
 
   const logout = React.useCallback(async () => {
