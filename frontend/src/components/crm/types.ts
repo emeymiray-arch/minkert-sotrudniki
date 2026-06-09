@@ -1,6 +1,14 @@
 export type CrmClientStatus = 'RED' | 'YELLOW' | 'GREEN' | 'BLUE' | 'BLACK';
 export type CrmVisitStatus = 'SCHEDULED' | 'ARRIVED' | 'NO_SHOW' | 'RESCHEDULED' | 'CANCELED';
 
+export const VISIT_STATUS_RU: Record<CrmVisitStatus, string> = {
+  SCHEDULED: 'Записана',
+  ARRIVED: 'Пришла',
+  NO_SHOW: 'Не пришла',
+  RESCHEDULED: 'Перенесла',
+  CANCELED: 'Отменила',
+};
+
 export type IntervalCompliance = {
   nextSequenceNumber: number;
   minIntervalDays: number;

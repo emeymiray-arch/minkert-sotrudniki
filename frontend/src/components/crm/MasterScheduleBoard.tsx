@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
-import { type CrmClientStatus } from '@/components/crm/types';
-import { STATUS_CLASS, STATUS_RU } from '@/components/crm/types';
+import { type CrmClientStatus, type CrmVisitStatus, STATUS_CLASS, STATUS_RU, VISIT_STATUS_RU } from '@/components/crm/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,14 +21,14 @@ type ScheduleAppointment = {
   clientDiscountPercent?: number;
   masterName?: string;
   masterSpecialty?: string;
-  visitStatus: string;
+  visitStatus: CrmVisitStatus;
   sequenceNumber?: number;
 };
 
 type ScheduleSlot = {
   time: string;
   label: string;
-  status: 'free' | 'busy';
+  status: 'free' | 'busy' | 'canceled';
   appointment?: ScheduleAppointment;
 };
 
@@ -63,19 +62,32 @@ function formatTime(iso: string) {
 
 function ScheduleClientCard({ appointment }: { appointment: ScheduleAppointment }) {
   const status = appointment.clientStatus;
+  const canceled = appointment.visitStatus === 'CANCELED';
   return (
-    <div className="rounded-xl border border-stroke bg-white/50 p-4 dark:border-white/[0.08] dark:bg-white/[0.02]">
+    <div
+      className={cn(
+        'rounded-xl border border-stroke bg-white/50 p-4 dark:border-white/[0.08] dark:bg-white/[0.02]',
+        canceled && 'border-dashed opacity-80',
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-lg font-semibold text-zinc-900 dark:text-white">{appointment.clientName}</div>
+          <div className={cn('text-lg font-semibold text-zinc-900 dark:text-white', canceled && 'line-through')}>
+            {appointment.clientName}
+          </div>
           <div className="mt-0.5 text-sm text-muted">
             {appointment.clientPhone || 'Телефон не указан'}
             {appointment.clientVisitsCount != null ? ` · Визитов: ${appointment.clientVisitsCount}` : ''}
           </div>
         </div>
-        {status ?
-          <Badge className={STATUS_CLASS[status]}>{STATUS_RU[status]}</Badge>
-        : null}
+        <div className="flex flex-wrap gap-2">
+          {canceled ?
+            <Badge className="bg-zinc-500/15 text-zinc-700 dark:text-zinc-200">{VISIT_STATUS_RU.CANCELED}</Badge>
+          : null}
+          {status ?
+            <Badge className={STATUS_CLASS[status]}>{STATUS_RU[status]}</Badge>
+          : null}
+        </div>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-stroke/80 bg-zinc-50/80 px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
@@ -114,7 +126,7 @@ export function MasterScheduleBoard() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="Расписание мастеров" description="Зелёное — свободно, красное — занято. Ниже карточки клиентов с временем, мастером и услугой." />
+        <CardHeader title="Расписание мастеров" description="Зелёное — свободно, красное — занято, серое — отмена (окно снова свободно). Ниже карточки с временем, мастером и услугой." />
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-muted">
             Дата
@@ -155,21 +167,29 @@ export function MasterScheduleBoard() {
                   <td className="px-3 py-2 font-medium tabular-nums">{data.masters[0]!.slots[rowIdx]!.label}</td>
                   {data.masters.map((m) => {
                     const slot = m.slots[rowIdx]!;
-                    const busy = slot.status === 'busy';
                     const appt = slot.appointment;
                     return (
                       <td
                         key={`${m.id}-${rowIdx}`}
                         className={cn(
                           'border-l border-stroke/40 px-2 py-1.5 text-xs dark:border-white/[0.05]',
-                          busy ?
+                          slot.status === 'busy' ?
                             'bg-rose-500/15 text-rose-900 dark:text-rose-200'
+                          : slot.status === 'canceled' ?
+                            'bg-zinc-400/15 text-zinc-700 dark:text-zinc-300'
                           : 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200',
                         )}
                       >
-                        {busy && appt ?
+                        {slot.status === 'busy' && appt ?
                           <>
                             <div className="font-semibold">{appt.clientName}</div>
+                            <div className="tabular-nums">{formatTime(appt.startsAt)}</div>
+                            <div>{appt.service}</div>
+                          </>
+                        : slot.status === 'canceled' && appt ?
+                          <>
+                            <div className="font-semibold line-through">{appt.clientName}</div>
+                            <div className="font-medium text-zinc-600 dark:text-zinc-400">Отмена</div>
                             <div className="tabular-nums">{formatTime(appt.startsAt)}</div>
                             <div>{appt.service}</div>
                           </>

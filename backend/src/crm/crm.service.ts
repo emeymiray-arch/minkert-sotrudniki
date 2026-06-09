@@ -31,6 +31,12 @@ const BLOCKING_VISIT_STATUSES: CrmVisitStatus[] = [
   CrmVisitStatus.ARRIVED,
 ];
 
+/** Показываем в расписании мастеров (включая отмены — окно снова свободно). */
+const SCHEDULE_DISPLAY_STATUSES: CrmVisitStatus[] = [
+  ...BLOCKING_VISIT_STATUSES,
+  CrmVisitStatus.CANCELED,
+];
+
 function normalizePhone(raw?: string) {
   return (raw ?? '').replace(/[^\d+]/g, '');
 }
@@ -176,7 +182,7 @@ export class CrmService {
     const appointments = await this.prisma.crmAppointment.findMany({
       where: {
         startsAt: { gte: day, lt: dayEnd },
-        visitStatus: { in: BLOCKING_VISIT_STATUSES },
+        visitStatus: { in: SCHEDULE_DISPLAY_STATUSES },
         ...(salonId?.trim() ? { salonId: salonId.trim() } : {}),
       },
       include: {
@@ -199,7 +205,10 @@ export class CrmService {
     const board = filteredMasters.map((master) => {
       const masterAppts = appointments.filter((a) => a.masterId === master.id);
       const slots = slotStarts.map((slotStart) => {
-        const hit = masterAppts.find((a) => appointmentOverlapsSlot(slotStart, a.startsAt));
+        const overlaps = (a: (typeof masterAppts)[number]) => appointmentOverlapsSlot(slotStart, a.startsAt);
+        const hit =
+          masterAppts.find((a) => BLOCKING_VISIT_STATUSES.includes(a.visitStatus) && overlaps(a)) ??
+          masterAppts.find((a) => a.visitStatus === CrmVisitStatus.CANCELED && overlaps(a));
         if (!hit) {
           return {
             time: slotStart.toISOString(),
@@ -207,10 +216,11 @@ export class CrmService {
             status: 'free' as const,
           };
         }
+        const canceled = hit.visitStatus === CrmVisitStatus.CANCELED;
         return {
           time: slotStart.toISOString(),
           label: formatSlotLabel(slotStart),
-          status: 'busy' as const,
+          status: canceled ? ('canceled' as const) : ('busy' as const),
           appointment: {
             id: hit.id,
             clientId: hit.client.id,
