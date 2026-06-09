@@ -21,10 +21,43 @@ export class CrmController {
     @Body()
     body: {
       salons?: Array<{ id: string; name: string; address: string }>;
-      masterEmployeeIds?: string[];
     },
   ) {
     return this.crm.updateWorkspaceConfig(body);
+  }
+
+  @Get('masters')
+  listMasters() {
+    return this.crm.listMasters(true);
+  }
+
+  @Post('masters')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  createMaster(@Body() body: { name: string; phone?: string; specialty?: string; salonId?: string }) {
+    return this.crm.createMaster(body);
+  }
+
+  @Patch('masters/:id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  patchMaster(
+    @Param('id') id: string,
+    @Body()
+    body: Partial<{ name: string; phone: string; specialty: string; salonId: string; active: boolean; sortOrder: number }>,
+  ) {
+    return this.crm.updateMaster(id, body);
+  }
+
+  @Delete('masters/:id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  removeMaster(@Param('id') id: string) {
+    return this.crm.deleteMaster(id);
+  }
+
+  @Get('schedule')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  schedule(@Query('date') date: string, @Query('salonId') salonId?: string) {
+    if (!date?.trim()) throw new BadRequestException('date обязателен (YYYY-MM-DD)');
+    return this.crm.getSchedule(date.trim(), salonId);
   }
 
   @Get('masters/slot')

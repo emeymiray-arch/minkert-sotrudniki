@@ -4,7 +4,9 @@ import { toast } from 'sonner';
 
 import { AppointmentBookingForm } from '@/components/crm/AppointmentBookingForm';
 import { ClientCard } from '@/components/crm/ClientCard';
+import { CrmMastersManager } from '@/components/crm/CrmMastersManager';
 import { CrmWorkspaceSettings } from '@/components/crm/CrmWorkspaceSettings';
+import { MasterScheduleBoard } from '@/components/crm/MasterScheduleBoard';
 import {
   type CrmClient,
   type CrmClientStatus,
@@ -333,6 +335,12 @@ export default function CrmPage() {
           <TabsList className="flex-wrap">
             <TabsTrigger value="clients">Клиенты</TabsTrigger>
             <TabsTrigger value="appointments">Записи</TabsTrigger>
+            {canWrite ?
+              <>
+                <TabsTrigger value="schedule">Расписание</TabsTrigger>
+                <TabsTrigger value="masters">Мастера</TabsTrigger>
+              </>
+            : null}
             <TabsTrigger value="unified">Все клиенты</TabsTrigger>
             <TabsTrigger value="intervals">Интервалы</TabsTrigger>
             <TabsTrigger value="repeat">Повтор</TabsTrigger>
@@ -374,8 +382,20 @@ export default function CrmPage() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="schedule" className="space-y-4">
+            {canWrite ? <MasterScheduleBoard /> : null}
+          </TabsContent>
+
+          <TabsContent value="masters" className="space-y-4">
+            {canWrite ?
+              <>
+                {isAdmin ? <CrmWorkspaceSettings disabled={!isAdmin} /> : null}
+                <CrmMastersManager disabled={!canWrite} />
+              </>
+            : null}
+          </TabsContent>
+
           <TabsContent value="appointments" className="space-y-4">
-            {isAdmin ? <CrmWorkspaceSettings disabled={!isAdmin} /> : null}
 
             <Card>
               <CardHeader

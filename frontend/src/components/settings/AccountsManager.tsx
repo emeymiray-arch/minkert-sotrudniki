@@ -16,14 +16,24 @@ type Account = {
   name: string;
   role: UserRole;
   linkedEmployeeId: string | null;
+  linkedCrmMasterId: string | null;
 };
+
+type CrmMaster = { id: string; name: string; specialty: string };
 
 const ROLES: UserRole[] = ['ADMIN', 'MANAGER', 'MASTER', 'VIEWER', 'LOYALTY'];
 
 export function AccountsManager() {
   const qc = useQueryClient();
   const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [draft, setDraft] = React.useState({ name: '', email: '', password: '', role: 'LOYALTY' as UserRole, linkedEmployeeId: '' });
+  const [draft, setDraft] = React.useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'LOYALTY' as UserRole,
+    linkedEmployeeId: '',
+    linkedCrmMasterId: '',
+  });
 
   const accountsQ = useQuery({
     queryKey: ['users', 'list'],
@@ -31,17 +41,30 @@ export function AccountsManager() {
     staleTime: 60_000,
   });
 
+  const mastersQ = useQuery({
+    queryKey: ['crm', 'masters'],
+    queryFn: () => apiJson<CrmMaster[]>('/crm/masters'),
+    staleTime: 60_000,
+  });
+
   const saveMu = useMutation({
-    mutationFn: (body: { id: string; name: string; email: string; password?: string; role: UserRole; linkedEmployeeId?: string }) => {
+    mutationFn: (body: {
+      id: string;
+      name: string;
+      email: string;
+      password?: string;
+      role: UserRole;
+      linkedEmployeeId?: string;
+      linkedCrmMasterId?: string;
+    }) => {
       const payload: Record<string, string> = {
         name: body.name.trim(),
         email: body.email.trim(),
         role: body.role,
       };
       if (body.password && body.password.length >= 6) payload.password = body.password;
-      if (body.role === 'VIEWER' || body.role === 'MASTER') {
-        payload.linkedEmployeeId = body.linkedEmployeeId?.trim() ?? '';
-      }
+      if (body.role === 'VIEWER') payload.linkedEmployeeId = body.linkedEmployeeId?.trim() ?? '';
+      if (body.role === 'MASTER') payload.linkedCrmMasterId = body.linkedCrmMasterId?.trim() ?? '';
       return apiJson(`/users/${body.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
     },
     onSuccess: async () => {
@@ -60,8 +83,11 @@ export function AccountsManager() {
       password: '',
       role: a.role,
       linkedEmployeeId: a.linkedEmployeeId ?? '',
+      linkedCrmMasterId: a.linkedCrmMasterId ?? '',
     });
   };
+
+  const masters = (mastersQ.data ?? []).filter((m) => m);
 
   return (
     <Card>
@@ -95,13 +121,27 @@ export function AccountsManager() {
                       </option>
                     ))}
                   </select>
-                  {draft.role === 'VIEWER' || draft.role === 'MASTER' ?
+                  {draft.role === 'VIEWER' ?
                     <Input
                       className="sm:col-span-2"
                       value={draft.linkedEmployeeId}
                       onChange={(e) => setDraft((d) => ({ ...d, linkedEmployeeId: e.target.value }))}
                       placeholder="ID карточки сотрудника"
                     />
+                  : null}
+                  {draft.role === 'MASTER' ?
+                    <select
+                      className="h-10 rounded-lg border border-stroke bg-[hsl(var(--panel))] px-3 text-sm outline-none sm:col-span-2 dark:border-white/[0.08]"
+                      value={draft.linkedCrmMasterId}
+                      onChange={(e) => setDraft((d) => ({ ...d, linkedCrmMasterId: e.target.value }))}
+                    >
+                      <option value="">Выберите мастера CRM</option>
+                      {masters.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}{m.specialty ? ` · ${m.specialty}` : ''}
+                        </option>
+                      ))}
+                    </select>
                   : null}
                   <div className="flex gap-2 sm:col-span-2">
                     <Button
@@ -114,6 +154,7 @@ export function AccountsManager() {
                           password: draft.password || undefined,
                           role: draft.role,
                           linkedEmployeeId: draft.linkedEmployeeId,
+                          linkedCrmMasterId: draft.linkedCrmMasterId,
                         })
                       }
                     >

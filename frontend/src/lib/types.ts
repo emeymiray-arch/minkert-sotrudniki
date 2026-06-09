@@ -9,6 +9,8 @@ export type AuthUser = {
   role: UserRole;
   /** Карточка сотрудника: при роли VIEWER можно менять дни в задачах только у этой карточки. */
   linkedEmployeeId?: string | null;
+  /** Профиль мастера CRM (роль MASTER). */
+  linkedCrmMasterId?: string | null;
 };
 
 export type Employee = {

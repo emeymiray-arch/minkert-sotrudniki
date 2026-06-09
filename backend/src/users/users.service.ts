@@ -64,6 +64,7 @@ export class UsersService {
         name: true,
         role: true,
         linkedEmployeeId: true,
+        linkedCrmMasterId: true,
         createdAt: true,
       },
     });
@@ -77,6 +78,7 @@ export class UsersService {
       password?: string;
       role?: UserRole;
       linkedEmployeeId?: string | null;
+      linkedCrmMasterId?: string | null;
     },
   ) {
     await this.requireById(userId);
@@ -86,6 +88,7 @@ export class UsersService {
       passwordHash?: string;
       role?: UserRole;
       linkedEmployeeId?: string | null;
+      linkedCrmMasterId?: string | null;
     } = {};
 
     if (dto.name !== undefined) data.name = dto.name.trim();
@@ -107,6 +110,14 @@ export class UsersService {
       }
       data.linkedEmployeeId = link;
     }
+    if (dto.linkedCrmMasterId !== undefined) {
+      const link = dto.linkedCrmMasterId === '' || dto.linkedCrmMasterId === null ? null : dto.linkedCrmMasterId;
+      if (link) {
+        const master = await this.prisma.crmMaster.findUnique({ where: { id: link } });
+        if (!master) throw new NotFoundException('Мастер CRM не найден');
+      }
+      data.linkedCrmMasterId = link;
+    }
 
     return this.prisma.user.update({
       where: { id: userId },
@@ -117,6 +128,7 @@ export class UsersService {
         name: true,
         role: true,
         linkedEmployeeId: true,
+        linkedCrmMasterId: true,
       },
     });
   }

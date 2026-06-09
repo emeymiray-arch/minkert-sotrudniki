@@ -20,6 +20,7 @@ export class UsersController {
       name: me.name,
       role: me.role,
       linkedEmployeeId: me.linkedEmployeeId ?? null,
+      linkedCrmMasterId: me.linkedCrmMasterId ?? null,
     };
   }
 

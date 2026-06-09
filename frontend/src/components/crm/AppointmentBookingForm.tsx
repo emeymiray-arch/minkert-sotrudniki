@@ -9,7 +9,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { apiJson } from '@/lib/http';
 
 type CrmSalon = { id: string; name: string; address: string };
-type Master = { id: string; name: string; position: string };
+type Master = { id: string; name: string; specialty?: string; phone?: string };
 
 export function AppointmentBookingForm({
   disabled,
@@ -177,7 +177,9 @@ export function AppointmentBookingForm({
           >
             <option value="">Выберите мастера</option>
             {(workspaceQ.data?.masters ?? []).map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
+              <option key={m.id} value={m.id}>
+                {m.name}{m.specialty ? ` · ${m.specialty}` : ''}
+              </option>
             ))}
           </select>
         </div>

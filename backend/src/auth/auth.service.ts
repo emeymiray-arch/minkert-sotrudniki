@@ -53,12 +53,14 @@ export class AuthService {
     email: string;
     role: UserRole;
     linkedEmployeeId?: string | null;
+    linkedCrmMasterId?: string | null;
   }): Promise<AuthTokenPair> {
     const payload: JwtUserPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       linkedEmployeeId: user.linkedEmployeeId ?? null,
+      linkedCrmMasterId: user.linkedCrmMasterId ?? null,
     };
     const accessToken = this.signAccess(payload);
     const rawRefresh = randomRefreshToken();
@@ -84,6 +86,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         linkedEmployeeId: user.linkedEmployeeId ?? null,
+        linkedCrmMasterId: user.linkedCrmMasterId ?? null,
       },
     };
   }
@@ -111,6 +114,7 @@ export class AuthService {
       email: u.email,
       role: u.role,
       linkedEmployeeId: u.linkedEmployeeId,
+      linkedCrmMasterId: u.linkedCrmMasterId,
     });
   }
 

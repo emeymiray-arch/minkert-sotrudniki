@@ -12,6 +12,16 @@ import {
   type CrmWorkspaceConfig,
 } from './crm-config.util';
 import {
+  APPOINTMENT_DURATION_MINUTES,
+  appointmentOverlapsSlot,
+  buildDaySlotStarts,
+  formatSlotLabel,
+  parseScheduleDate,
+  SCHEDULE_DAY_END_HOUR,
+  SCHEDULE_DAY_START_HOUR,
+  SCHEDULE_SLOT_MINUTES,
+} from './crm-schedule.util';
+import {
   computeIntervalCompliance,
   minIntervalDaysForSequence,
 } from './crm-interval.util';
@@ -71,49 +81,159 @@ export class CrmService {
 
   async getWorkspaceConfig() {
     const config = await this.loadCrmConfig();
-    const masters = await this.resolveMasters(config);
-    return { salons: config.salons, masterEmployeeIds: config.masterEmployeeIds, masters };
+    const masters = await this.listMasters(false);
+    return { salons: config.salons, masters };
   }
 
-  async updateWorkspaceConfig(body: { salons?: CrmSalon[]; masterEmployeeIds?: string[] }) {
+  async updateWorkspaceConfig(body: { salons?: CrmSalon[] }) {
     const current = await this.loadCrmConfig();
     const salons = body.salons ?? current.salons;
-    const masterEmployeeIds = body.masterEmployeeIds ?? current.masterEmployeeIds;
     await this.prisma.opsSettings.upsert({
       where: { id: 'default' },
-      create: { id: 'default', crmSalons: salons, crmMasterIds: masterEmployeeIds },
-      update: { crmSalons: salons, crmMasterIds: masterEmployeeIds },
+      create: { id: 'default', crmSalons: salons },
+      update: { crmSalons: salons },
     });
     return this.getWorkspaceConfig();
   }
 
-  async resolveMasters(config?: CrmWorkspaceConfig) {
-    const cfg = config ?? (await this.loadCrmConfig());
-    if (cfg.masterEmployeeIds.length) {
-      return this.prisma.employee.findMany({
-        where: { id: { in: cfg.masterEmployeeIds }, status: 'ACTIVE' },
-        select: { id: true, name: true, position: true },
-        orderBy: { name: 'asc' },
-      });
-    }
-    const links = await this.prisma.user.findMany({
-      where: { role: UserRole.MASTER, linkedEmployeeId: { not: null } },
-      select: { linkedEmployeeId: true },
+  async listMasters(includeInactive = true) {
+    return this.prisma.crmMaster.findMany({
+      where: includeInactive ? undefined : { active: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        specialty: true,
+        salonId: true,
+        active: true,
+        sortOrder: true,
+      },
     });
-    const ids = [...new Set(links.map((l) => l.linkedEmployeeId!).filter(Boolean))];
-    if (!ids.length) {
-      return this.prisma.employee.findMany({
-        where: { status: 'ACTIVE' },
-        select: { id: true, name: true, position: true },
-        orderBy: { name: 'asc' },
-        take: 10,
-      });
-    }
-    return this.prisma.employee.findMany({
-      where: { id: { in: ids }, status: 'ACTIVE' },
-      select: { id: true, name: true, position: true },
-      orderBy: { name: 'asc' },
+  }
+
+  async createMaster(body: { name: string; phone?: string; specialty?: string; salonId?: string }) {
+    const name = body.name?.trim();
+    if (!name) throw new BadRequestException('Имя мастера обязательно');
+    const count = await this.prisma.crmMaster.count();
+    return this.prisma.crmMaster.create({
+      data: {
+        name,
+        phone: body.phone?.trim() ?? '',
+        specialty: body.specialty?.trim() ?? '',
+        salonId: body.salonId?.trim() ?? '',
+        sortOrder: count,
+      },
     });
+  }
+
+  async updateMaster(
+    id: string,
+    body: Partial<{ name: string; phone: string; specialty: string; salonId: string; active: boolean; sortOrder: number }>,
+  ) {
+    await this.prisma.crmMaster.findUniqueOrThrow({ where: { id } });
+    return this.prisma.crmMaster.update({
+      where: { id },
+      data: {
+        name: body.name?.trim(),
+        phone: body.phone?.trim(),
+        specialty: body.specialty?.trim(),
+        salonId: body.salonId?.trim(),
+        active: body.active,
+        sortOrder: body.sortOrder,
+      },
+    });
+  }
+
+  async deleteMaster(id: string) {
+    await this.prisma.crmMaster.update({ where: { id }, data: { active: false } });
+    return { ok: true };
+  }
+
+  async resolveMasters() {
+    return this.listMasters(false);
+  }
+
+  private masterIdForUser(user?: JwtUserPayload) {
+    if (!user || user.role !== UserRole.MASTER) return null;
+    return user.linkedCrmMasterId ?? user.linkedEmployeeId ?? null;
+  }
+
+  async getSchedule(dateRaw: string, salonId?: string) {
+    let day: Date;
+    try {
+      day = parseScheduleDate(dateRaw);
+    } catch {
+      throw new BadRequestException('Дата: YYYY-MM-DD');
+    }
+    const dayEnd = new Date(
+      Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), SCHEDULE_DAY_END_HOUR, 0, 0),
+    );
+    const masters = await this.listMasters(false);
+    const filteredMasters =
+      salonId?.trim() ? masters.filter((m) => !m.salonId || m.salonId === salonId.trim()) : masters;
+
+    const appointments = await this.prisma.crmAppointment.findMany({
+      where: {
+        startsAt: { gte: day, lt: dayEnd },
+        visitStatus: { in: BLOCKING_VISIT_STATUSES },
+        ...(salonId?.trim() ? { salonId: salonId.trim() } : {}),
+      },
+      include: {
+        client: { select: { fullName: true, phone: true } },
+        master: { select: { id: true, name: true } },
+      },
+      orderBy: { startsAt: 'asc' },
+    });
+
+    const slotStarts = buildDaySlotStarts(day);
+    const board = filteredMasters.map((master) => {
+      const masterAppts = appointments.filter((a) => a.masterId === master.id);
+      const slots = slotStarts.map((slotStart) => {
+        const hit = masterAppts.find((a) => appointmentOverlapsSlot(slotStart, a.startsAt));
+        if (!hit) {
+          return {
+            time: slotStart.toISOString(),
+            label: formatSlotLabel(slotStart),
+            status: 'free' as const,
+          };
+        }
+        return {
+          time: slotStart.toISOString(),
+          label: formatSlotLabel(slotStart),
+          status: 'busy' as const,
+          appointment: {
+            id: hit.id,
+            startsAt: hit.startsAt.toISOString(),
+            service: hit.service,
+            clientName: hit.client.fullName,
+            visitStatus: hit.visitStatus,
+          },
+        };
+      });
+      return { ...master, slots };
+    });
+
+    return {
+      date: dateOnlyIso(day),
+      dayStart: `${String(SCHEDULE_DAY_START_HOUR).padStart(2, '0')}:00`,
+      dayEnd: `${String(SCHEDULE_DAY_END_HOUR).padStart(2, '0')}:00`,
+      slotMinutes: SCHEDULE_SLOT_MINUTES,
+      appointmentDurationMinutes: APPOINTMENT_DURATION_MINUTES,
+      masters: board,
+      appointments: appointments.map((a) => ({
+        id: a.id,
+        masterId: a.masterId,
+        masterName: a.master?.name ?? '—',
+        salonId: a.salonId,
+        startsAt: a.startsAt.toISOString(),
+        service: a.service,
+        clientName: a.client.fullName,
+        clientPhone: a.client.phone,
+        visitStatus: a.visitStatus,
+        sequenceNumber: a.sequenceNumber,
+      })),
+    };
   }
 
   private salonMeta(config: CrmWorkspaceConfig, salonId: string) {
@@ -155,8 +275,12 @@ export class CrmService {
   }
 
   private ensureMasterScope(where: Record<string, unknown>, user?: JwtUserPayload) {
-    if (user?.role === UserRole.MASTER && user.linkedEmployeeId) {
-      where.OR = [{ appointments: { some: { masterId: user.linkedEmployeeId } } }, { procedures: { some: { masterId: user.linkedEmployeeId } } }];
+    const masterId = this.masterIdForUser(user);
+    if (masterId) {
+      where.OR = [
+        { appointments: { some: { masterId } } },
+        { procedures: { some: { masterId } } },
+      ];
     }
   }
 
@@ -522,9 +646,9 @@ export class CrmService {
     if (!masterId) throw new BadRequestException('Выберите мастера');
 
     const config = await this.loadCrmConfig();
-    const masters = await this.resolveMasters(config);
-    if (!masters.some((m) => m.id === masterId)) {
-      throw new BadRequestException('Выбранный мастер не найден в списке');
+    const master = await this.prisma.crmMaster.findFirst({ where: { id: masterId, active: true } });
+    if (!master) {
+      throw new BadRequestException('Выбранный мастер не найден');
     }
 
     const salonId = body.salonId?.trim() || config.salons[0]?.id || '';
@@ -620,7 +744,8 @@ export class CrmService {
   async listAppointments(from?: string, to?: string, masterId?: string, user?: JwtUserPayload) {
     const where: Record<string, unknown> = {};
     if (masterId?.trim()) where.masterId = masterId.trim();
-    if (user?.role === UserRole.MASTER && user.linkedEmployeeId) where.masterId = user.linkedEmployeeId;
+    const scopedMasterId = this.masterIdForUser(user);
+    if (scopedMasterId) where.masterId = scopedMasterId;
     let fromDate = from ? parseDateTime(from) : null;
     let toDate = to ? parseDateTime(to) : null;
     if (!fromDate && !toDate) {
@@ -817,8 +942,9 @@ export class CrmService {
     });
 
     const masterIds = perMaster.map((p) => p.masterId!).filter(Boolean);
-    const masters = masterIds.length ?
-      await this.prisma.employee.findMany({ where: { id: { in: masterIds } }, select: { id: true, name: true } })
+    const masters =
+      masterIds.length ?
+        await this.prisma.crmMaster.findMany({ where: { id: { in: masterIds } }, select: { id: true, name: true } })
       : [];
     const nameMap = new Map(masters.map((m) => [m.id, m.name]));
 

@@ -28,12 +28,15 @@ model User {
   role               UserRole       @default(VIEWER)
   linkedEmployeeId   String?
   linkedEmployee     Employee?      @relation(fields: [linkedEmployeeId], references: [id], onDelete: SetNull)
+  linkedCrmMasterId  String?
+  linkedCrmMaster    CrmMaster?     @relation(fields: [linkedCrmMasterId], references: [id], onDelete: SetNull)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   refreshTokens      RefreshToken[]
   pushSubscriptions  PushSubscription[]
 
   @@index([linkedEmployeeId])
+  @@index([linkedCrmMasterId])
 }
 
 model PushSubscription {
@@ -78,8 +81,6 @@ model Employee {
   opsContentReviews OpsContentReview[]
   opsReports  OpsReportLog[]
   opsCheckEntries OpsTaskCheckEntry[]
-  crmProcedures CrmProcedure[]
-  crmAppointments CrmAppointment[]
 
   @@index([name])
   @@index([status])
@@ -467,12 +468,30 @@ model CrmClient {
   @@index([lastProcedureAt])
 }
 
+model CrmMaster {
+  id           String           @id @default(cuid())
+  name         String
+  phone        String           @default("")
+  specialty    String           @default("")
+  salonId      String           @default("")
+  active       Boolean          @default(true)
+  sortOrder    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  appointments CrmAppointment[]
+  procedures   CrmProcedure[]
+  linkedUsers  User[]
+
+  @@index([active, sortOrder])
+  @@index([name])
+}
+
 model CrmProcedure {
   id                String    @id @default(cuid())
   clientId          String
   client            CrmClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   masterId          String?
-  master            Employee? @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  master            CrmMaster? @relation(fields: [masterId], references: [id], onDelete: SetNull)
   procedureDate     DateTime  @db.Date
   service           String
   cost              Int       @default(0)
@@ -502,7 +521,7 @@ model CrmAppointment {
   clientId       String
   client         CrmClient      @relation(fields: [clientId], references: [id], onDelete: Cascade)
   masterId       String?
-  master         Employee?      @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  master         CrmMaster?     @relation(fields: [masterId], references: [id], onDelete: SetNull)
   service        String
   sequenceNumber Int            @default(1)
   salonId        String         @default("")

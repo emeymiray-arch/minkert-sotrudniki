@@ -6,4 +6,5 @@ export interface JwtUserPayload {
   role: UserRole;
   /** Карточка сотрудника: сотрудник с ролью VIEWER может менять дни в задачах только этой карточки. */
   linkedEmployeeId?: string | null;
+  linkedCrmMasterId?: string | null;
 }

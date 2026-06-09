@@ -23,4 +23,9 @@ export class AdminUpdateUserDto {
   @IsOptional()
   @IsString()
   linkedEmployeeId?: string | null;
+
+  /** Для роли MASTER — привязка к карточке мастера CRM. */
+  @IsOptional()
+  @IsString()
+  linkedCrmMasterId?: string | null;
 }
