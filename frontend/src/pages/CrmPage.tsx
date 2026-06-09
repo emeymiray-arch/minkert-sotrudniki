@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { AppointmentBookingForm } from '@/components/crm/AppointmentBookingForm';
 import { ClientCard } from '@/components/crm/ClientCard';
+import { CrmWorkspaceSettings } from '@/components/crm/CrmWorkspaceSettings';
 import {
   type CrmClient,
   type CrmClientStatus,
@@ -46,9 +47,13 @@ type CrmAppointment = {
   clientId: string;
   service: string;
   sequenceNumber: number;
+  salonId: string;
+  salonName?: string;
+  salonAddress?: string;
   startsAt: string;
   visitStatus: CrmVisitStatus;
   interval?: IntervalCompliance;
+  master?: { id: string; name: string } | null;
   client: {
     id: string;
     fullName: string;
@@ -210,6 +215,8 @@ export default function CrmPage() {
     mutationFn: (payload: {
       clientId?: string;
       newClient?: { fullName: string; phone?: string };
+      masterId: string;
+      salonId: string;
       service: string;
       startsAt: string;
       sequenceNumber: number;
@@ -278,9 +285,10 @@ export default function CrmPage() {
                   <div className="text-lg font-semibold">{a.client.fullName}</div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <div><span className="text-xs uppercase text-muted">Время</span><div className="font-medium">{new Date(a.startsAt).toLocaleString('ru-RU')}</div></div>
+                    <div><span className="text-xs uppercase text-muted">Мастер</span><div className="font-medium">{a.master?.name ?? '—'}</div></div>
                     <div><span className="text-xs uppercase text-muted">Процедура №</span><div className="font-medium">{a.sequenceNumber}</div></div>
                     <div><span className="text-xs uppercase text-muted">Услуга</span><div className="font-medium">{a.service}</div></div>
-                    <div><span className="text-xs uppercase text-muted">Телефон</span><div className="font-medium">{a.client.phone || '—'}</div></div>
+                    <div className="sm:col-span-2"><span className="text-xs uppercase text-muted">Салон</span><div className="font-medium">{a.salonName ?? '—'}{a.salonAddress ? ` · ${a.salonAddress}` : ''}</div></div>
                   </div>
                 </div>
               ))}
@@ -333,6 +341,8 @@ export default function CrmPage() {
           </TabsContent>
 
           <TabsContent value="appointments" className="space-y-4">
+            {isAdmin ? <CrmWorkspaceSettings disabled={!isAdmin} /> : null}
+
             <Card>
               <CardHeader
                 title="Новая запись"
@@ -407,11 +417,12 @@ export default function CrmPage() {
                         </div>
                         <Badge className={STATUS_CLASS[a.client.status]}>{STATUS_RU[a.client.status]}</Badge>
                       </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         <div><div className="text-[10px] font-semibold uppercase text-muted">Дата</div><div className="font-medium">{new Date(a.startsAt).toLocaleString('ru-RU')}</div></div>
+                        <div><div className="text-[10px] font-semibold uppercase text-muted">Мастер</div><div className="font-medium">{a.master?.name ?? '—'}</div></div>
                         <div><div className="text-[10px] font-semibold uppercase text-muted">Процедура №</div><div className="font-medium">{a.sequenceNumber}</div></div>
                         <div><div className="text-[10px] font-semibold uppercase text-muted">Услуга</div><div className="font-medium">{a.service}</div></div>
-                        <div><div className="text-[10px] font-semibold uppercase text-muted">Визитов</div><div className="font-medium">{a.client.visitsCount}</div></div>
+                        <div className="sm:col-span-2"><div className="text-[10px] font-semibold uppercase text-muted">Салон</div><div className="font-medium">{a.salonName ?? '—'}{a.salonAddress ? ` · ${a.salonAddress}` : ''}</div></div>
                       </div>
                       {a.interval && !a.interval.intervalOk ?
                         <div className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">{a.interval.message}</div>

@@ -4,9 +4,19 @@ import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays } from '../common/date/week';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  normalizeCrmConfig,
+  type CrmSalon,
+  type CrmWorkspaceConfig,
+} from './crm-config.util';
+import {
   computeIntervalCompliance,
   minIntervalDaysForSequence,
 } from './crm-interval.util';
+
+const BLOCKING_VISIT_STATUSES: CrmVisitStatus[] = [
+  CrmVisitStatus.SCHEDULED,
+  CrmVisitStatus.ARRIVED,
+];
 
 function normalizePhone(raw?: string) {
   return (raw ?? '').replace(/[^\d+]/g, '');
@@ -43,6 +53,99 @@ function daysBetween(from: Date, to: Date) {
 @Injectable()
 export class CrmService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async loadCrmConfig(): Promise<CrmWorkspaceConfig> {
+    const row = await this.prisma.opsSettings.findUnique({ where: { id: 'default' } });
+    return normalizeCrmConfig({
+      salons: row?.crmSalons,
+      masterEmployeeIds: row?.crmMasterIds,
+    });
+  }
+
+  async getWorkspaceConfig() {
+    const config = await this.loadCrmConfig();
+    const masters = await this.resolveMasters(config);
+    return { salons: config.salons, masterEmployeeIds: config.masterEmployeeIds, masters };
+  }
+
+  async updateWorkspaceConfig(body: { salons?: CrmSalon[]; masterEmployeeIds?: string[] }) {
+    const current = await this.loadCrmConfig();
+    const salons = body.salons ?? current.salons;
+    const masterEmployeeIds = body.masterEmployeeIds ?? current.masterEmployeeIds;
+    await this.prisma.opsSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', crmSalons: salons, crmMasterIds: masterEmployeeIds },
+      update: { crmSalons: salons, crmMasterIds: masterEmployeeIds },
+    });
+    return this.getWorkspaceConfig();
+  }
+
+  async resolveMasters(config?: CrmWorkspaceConfig) {
+    const cfg = config ?? (await this.loadCrmConfig());
+    if (cfg.masterEmployeeIds.length) {
+      return this.prisma.employee.findMany({
+        where: { id: { in: cfg.masterEmployeeIds }, status: 'ACTIVE' },
+        select: { id: true, name: true, position: true },
+        orderBy: { name: 'asc' },
+      });
+    }
+    const links = await this.prisma.user.findMany({
+      where: { role: UserRole.MANAGER, linkedEmployeeId: { not: null } },
+      select: { linkedEmployeeId: true },
+    });
+    const ids = [...new Set(links.map((l) => l.linkedEmployeeId!).filter(Boolean))];
+    if (!ids.length) {
+      return this.prisma.employee.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, name: true, position: true },
+        orderBy: { name: 'asc' },
+        take: 10,
+      });
+    }
+    return this.prisma.employee.findMany({
+      where: { id: { in: ids }, status: 'ACTIVE' },
+      select: { id: true, name: true, position: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  private salonMeta(config: CrmWorkspaceConfig, salonId: string) {
+    const salon = config.salons.find((s) => s.id === salonId);
+    return salon ?? { id: salonId, name: '—', address: '' };
+  }
+
+  private async assertMasterSlotFree(masterId: string, startsAt: Date, excludeId?: string) {
+    const conflict = await this.prisma.crmAppointment.findFirst({
+      where: {
+        masterId,
+        startsAt,
+        visitStatus: { in: BLOCKING_VISIT_STATUSES },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      include: { client: { select: { fullName: true } } },
+    });
+    if (conflict) {
+      throw new BadRequestException(
+        `Мастер уже занят в это время (клиент: ${conflict.client.fullName}). Выберите другое время.`,
+      );
+    }
+  }
+
+  async checkMasterSlot(masterId: string, startsAt: string) {
+    const at = parseDateTime(startsAt);
+    const conflict = await this.prisma.crmAppointment.findFirst({
+      where: {
+        masterId,
+        startsAt: at,
+        visitStatus: { in: BLOCKING_VISIT_STATUSES },
+      },
+      include: { client: { select: { fullName: true } } },
+    });
+    return {
+      available: !conflict,
+      conflictClient: conflict?.client.fullName ?? null,
+    };
+  }
 
   private ensureMasterScope(where: Record<string, unknown>, user?: JwtUserPayload) {
     if (user?.role === UserRole.MANAGER && user.linkedEmployeeId) {
@@ -349,6 +452,7 @@ export class CrmService {
     clientId?: string;
     newClient?: { fullName: string; phone?: string };
     masterId?: string | null;
+    salonId?: string;
     service: string;
     startsAt: string;
     sequenceNumber?: number;
@@ -358,6 +462,22 @@ export class CrmService {
     const startsAt = parseDateTime(body.startsAt);
     const service = body.service?.trim();
     if (!service) throw new BadRequestException('Услуга обязательна');
+
+    const masterId = body.masterId?.trim();
+    if (!masterId) throw new BadRequestException('Выберите мастера');
+
+    const config = await this.loadCrmConfig();
+    const masters = await this.resolveMasters(config);
+    if (!masters.some((m) => m.id === masterId)) {
+      throw new BadRequestException('Выбранный мастер не найден в списке');
+    }
+
+    const salonId = body.salonId?.trim() || config.salons[0]?.id || '';
+    if (!config.salons.some((s) => s.id === salonId)) {
+      throw new BadRequestException('Выберите салон');
+    }
+
+    await this.assertMasterSlotFree(masterId, startsAt);
 
     let clientId = body.clientId?.trim();
     let client =
@@ -385,10 +505,12 @@ export class CrmService {
       throw new BadRequestException(compliance.message);
     }
 
+    const salon = this.salonMeta(config, salonId);
     const appointment = await this.prisma.crmAppointment.create({
       data: {
         clientId,
-        masterId: body.masterId ?? null,
+        masterId,
+        salonId,
         service,
         sequenceNumber,
         startsAt,
@@ -406,6 +528,7 @@ export class CrmService {
             recommendedNextAt: true,
           },
         },
+        master: { select: { id: true, name: true } },
       },
     });
 
@@ -421,7 +544,11 @@ export class CrmService {
     });
 
     return {
-      appointment,
+      appointment: {
+        ...appointment,
+        salonName: salon.name,
+        salonAddress: salon.address,
+      },
       intervalWarning: compliance.intervalOk ? null : compliance.message,
       loyaltyCreated,
     };
@@ -435,6 +562,7 @@ export class CrmService {
     const toDate = to ? parseDateTime(to) : null;
     if (fromDate || toDate) where.startsAt = { gte: fromDate ?? undefined, lte: toDate ?? undefined };
 
+    const config = await this.loadCrmConfig();
     return this.prisma.crmAppointment.findMany({
       where,
       include: {
@@ -460,9 +588,12 @@ export class CrmService {
           a.client.lastProcedureAt,
           a.startsAt,
         );
+        const salon = this.salonMeta(config, a.salonId);
         return {
           ...a,
           interval: compliance,
+          salonName: salon.name,
+          salonAddress: salon.address,
         };
       }),
     );

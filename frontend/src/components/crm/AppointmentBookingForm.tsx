@@ -4,8 +4,12 @@ import * as React from 'react';
 import type { CrmClient, IntervalCompliance } from '@/components/crm/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { apiJson } from '@/lib/http';
+
+type CrmSalon = { id: string; name: string; address: string };
+type Master = { id: string; name: string; position: string };
 
 export function AppointmentBookingForm({
   disabled,
@@ -17,6 +21,8 @@ export function AppointmentBookingForm({
   onSubmit: (payload: {
     clientId?: string;
     newClient?: { fullName: string; phone?: string };
+    masterId: string;
+    salonId: string;
     service: string;
     startsAt: string;
     sequenceNumber: number;
@@ -32,7 +38,22 @@ export function AppointmentBookingForm({
   const [startsAt, setStartsAt] = React.useState('');
   const [sequenceNumber, setSequenceNumber] = React.useState('');
   const [forceInterval, setForceInterval] = React.useState(false);
+  const [masterId, setMasterId] = React.useState('');
+  const [salonId, setSalonId] = React.useState('');
   const dq = useDebouncedValue(q, 300);
+
+  const workspaceQ = useQuery({
+    queryKey: ['crm', 'workspace'],
+    queryFn: () =>
+      apiJson<{ salons: CrmSalon[]; masters: Master[] }>('/crm/workspace'),
+    staleTime: 60_000,
+  });
+
+  React.useEffect(() => {
+    if (!workspaceQ.data) return;
+    if (!salonId && workspaceQ.data.salons[0]) setSalonId(workspaceQ.data.salons[0].id);
+    if (!masterId && workspaceQ.data.masters[0]) setMasterId(workspaceQ.data.masters[0].id);
+  }, [workspaceQ.data, salonId, masterId]);
 
   const searchQ = useQuery({
     queryKey: ['crm', 'picker', dq],
@@ -54,18 +75,36 @@ export function AppointmentBookingForm({
     staleTime: 10_000,
   });
 
+  const slotQ = useQuery({
+    queryKey: ['crm', 'slot', masterId, startsAt],
+    queryFn: () =>
+      apiJson<{ available: boolean; conflictClient: string | null }>(
+        `/crm/masters/slot?masterId=${encodeURIComponent(masterId)}&startsAt=${encodeURIComponent(new Date(startsAt).toISOString())}`,
+      ),
+    enabled: Boolean(masterId && startsAt),
+    staleTime: 5_000,
+  });
+
+  const selectedSalon = workspaceQ.data?.salons.find((s) => s.id === salonId);
+
   React.useEffect(() => {
     if (selected && !sequenceNumber) {
       setSequenceNumber(String(selected.visitsCount + 1));
     }
   }, [selected?.id, selected?.visitsCount, sequenceNumber]);
 
+  const slotBlocked = Boolean(slotQ.data && !slotQ.data.available);
   const canSubmit =
     !disabled &&
     service.trim() &&
     startsAt &&
+    masterId &&
+    salonId &&
     effectiveSeq >= 1 &&
+    !slotBlocked &&
     (mode === 'search' ? Boolean(selected) : newName.trim().length > 0);
+
+  if (workspaceQ.isLoading) return <Skeleton className="h-40" />;
 
   return (
     <div className="space-y-4">
@@ -129,6 +168,36 @@ export function AppointmentBookingForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">Мастер *</label>
+          <select
+            className="h-10 w-full rounded-md border border-stroke bg-transparent px-3 text-sm"
+            value={masterId}
+            disabled={disabled}
+            onChange={(e) => setMasterId(e.target.value)}
+          >
+            <option value="">Выберите мастера</option>
+            {(workspaceQ.data?.masters ?? []).map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">Салон *</label>
+          <select
+            className="h-10 w-full rounded-md border border-stroke bg-transparent px-3 text-sm"
+            value={salonId}
+            disabled={disabled}
+            onChange={(e) => setSalonId(e.target.value)}
+          >
+            {(workspaceQ.data?.salons ?? []).map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          {selectedSalon?.address ?
+            <p className="mt-1 text-xs text-muted">{selectedSalon.address}</p>
+          : null}
+        </div>
+        <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">Услуга</label>
           <Input placeholder="Название процедуры" value={service} disabled={disabled} onChange={(e) => setService(e.target.value)} />
         </div>
@@ -151,6 +220,12 @@ export function AppointmentBookingForm({
           </p>
         </div>
       </div>
+
+      {slotQ.data && !slotQ.data.available ?
+        <div className="rounded-lg bg-rose-500/10 px-3 py-2.5 text-sm text-rose-900 dark:text-rose-100">
+          Мастер занят в это время{slotQ.data.conflictClient ? ` (клиент: ${slotQ.data.conflictClient})` : ''}. Выберите другое время.
+        </div>
+      : null}
 
       {intervalQ.data ?
         <div
@@ -184,6 +259,8 @@ export function AppointmentBookingForm({
           onSubmit({
             clientId: mode === 'search' ? selected?.id : undefined,
             newClient: mode === 'new' ? { fullName: newName.trim(), phone: newPhone.trim() || undefined } : undefined,
+            masterId,
+            salonId,
             service: service.trim(),
             startsAt,
             sequenceNumber: effectiveSeq,

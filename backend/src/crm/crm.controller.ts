@@ -10,6 +10,34 @@ import { CrmService } from './crm.service';
 export class CrmController {
   constructor(private readonly crm: CrmService) {}
 
+  @Get('workspace')
+  workspace() {
+    return this.crm.getWorkspaceConfig();
+  }
+
+  @Patch('workspace')
+  @Roles(UserRole.ADMIN)
+  patchWorkspace(
+    @Body()
+    body: {
+      salons?: Array<{ id: string; name: string; address: string }>;
+      masterEmployeeIds?: string[];
+    },
+  ) {
+    return this.crm.updateWorkspaceConfig(body);
+  }
+
+  @Get('masters/slot')
+  checkSlot(
+    @Query('masterId') masterId: string,
+    @Query('startsAt') startsAt: string,
+  ) {
+    if (!masterId?.trim() || !startsAt?.trim()) {
+      throw new BadRequestException('masterId и startsAt обязательны');
+    }
+    return this.crm.checkMasterSlot(masterId.trim(), startsAt);
+  }
+
   @Get('clients')
   listClients(
     @Query('q') q?: string,
@@ -85,6 +113,7 @@ export class CrmController {
       clientId?: string;
       newClient?: { fullName: string; phone?: string };
       masterId?: string | null;
+      salonId?: string;
       service: string;
       startsAt: string;
       sequenceNumber?: number;
