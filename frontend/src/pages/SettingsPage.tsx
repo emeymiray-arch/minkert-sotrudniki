@@ -167,6 +167,10 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      {user && ['ADMIN', 'MANAGER', 'MASTER'].includes(user.role) ?
+        <PushNotificationHelp onEnable={() => void enablePush()} />
+      : null}
+
       <Card>
         <CardHeader
           title="KPI управляющего"
@@ -258,10 +262,6 @@ export default function SettingsPage() {
             Сохранить план
           </Button>
         </Card>
-      : null}
-
-      {user && ['ADMIN', 'MANAGER', 'MASTER'].includes(user.role) ?
-        <PushNotificationHelp onEnable={() => void enablePush()} />
       : null}
 
       {user?.role === 'ADMIN' ?

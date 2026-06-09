@@ -6,8 +6,16 @@ export function homePathForRole(role?: UserRole | string): string {
   return '/';
 }
 
+function roleAllowsPath(pathname: string, allowed: string[]): boolean {
+  return allowed.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 /** Разрешённые пути для менеджера салона. */
 export function isManagerPath(pathname: string): boolean {
-  const allowed = ['/', '/crm', '/loyalty', '/finansy'];
-  return allowed.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return roleAllowsPath(pathname, ['/', '/crm', '/loyalty', '/finansy', '/settings']);
+}
+
+/** Разрешённые пути для мастера (CRM + уведомления). */
+export function isMasterPath(pathname: string): boolean {
+  return roleAllowsPath(pathname, ['/crm', '/settings']);
 }

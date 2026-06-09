@@ -78,10 +78,12 @@ function navItemsForRole(role?: UserRole) {
     return navItems.filter((item) => item.to === '/loyalty' || item.to === '/crm');
   }
   if (role === 'MASTER') {
-    return navItems.filter((item) => item.to === '/crm');
+    return navItems.filter((item) => item.to === '/crm' || item.to === '/settings');
   }
   if (role === 'MANAGER') {
-    return navItems.filter((item) => item.to === '/crm' || item.to === '/loyalty' || item.to === '/finansy');
+    return navItems.filter(
+      (item) => item.to === '/crm' || item.to === '/loyalty' || item.to === '/finansy' || item.to === '/settings',
+    );
   }
   return navItems;
 }
