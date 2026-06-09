@@ -13,6 +13,7 @@ import { cnRoleRu } from '@/lib/format';
 import { apiJson, getApiBaseUrl } from '@/lib/http';
 import type { ManagerKpiSummary } from '@/lib/types';
 import { AccountsManager } from '@/components/settings/AccountsManager';
+import { PushNotificationHelp } from '@/components/settings/PushNotificationHelp';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Input } from '@/components/ui/input';
 
@@ -260,15 +261,7 @@ export default function SettingsPage() {
       : null}
 
       {user && ['ADMIN', 'MANAGER', 'MASTER'].includes(user.role) ?
-        <Card>
-          <CardHeader
-            title="Уведомления на телефон"
-            description="Как в WhatsApp: на экране блокировки и в шторке. На iPhone: «Поделиться» → «На экран Домой», затем включите уведомления."
-          />
-          <Button type="button" variant="outline" onClick={() => void enablePush()}>
-            Включить push-уведомления
-          </Button>
-        </Card>
+        <PushNotificationHelp onEnable={() => void enablePush()} />
       : null}
 
       {user?.role === 'ADMIN' ?

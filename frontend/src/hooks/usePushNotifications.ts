@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { pushHintForIos } from '@/components/settings/PushNotificationHelp';
 import { useAuth } from '@/context/auth';
 import { apiJson } from '@/lib/http';
 
@@ -28,6 +29,11 @@ export function usePushNotifications() {
 
   const subscribe = React.useCallback(async () => {
     if (!isAuthenticated || !user) return false;
+    const iosHint = pushHintForIos();
+    if (iosHint) {
+      toast.message(iosHint, { duration: 12_000 });
+      return false;
+    }
     if (!pushSupported()) {
       toast.message('Push недоступен в этом браузере');
       return false;
