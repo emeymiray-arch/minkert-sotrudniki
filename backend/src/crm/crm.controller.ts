@@ -54,7 +54,7 @@ export class CrmController {
   }
 
   @Get('schedule')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
   schedule(@Query('date') date: string, @Query('salonId') salonId?: string) {
     if (!date?.trim()) throw new BadRequestException('date обязателен (YYYY-MM-DD)');
     return this.crm.getSchedule(date.trim(), salonId);

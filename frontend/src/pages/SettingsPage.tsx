@@ -298,7 +298,7 @@ export default function SettingsPage() {
               <option value="LOYALTY">Лояльность</option>
               <option value="MANAGER">Менеджер салона</option>
               <option value="MASTER">Мастер (CRM просмотр)</option>
-              <option value="VIEWER">Только просмотр</option>
+              <option value="VIEWER">Наблюдатель (расписание)</option>
               <option value="ADMIN">Администратор</option>
             </select>
             {accRole === 'VIEWER' || accRole === 'MASTER' ?

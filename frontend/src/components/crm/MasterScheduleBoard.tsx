@@ -1,23 +1,36 @@
 import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
+import { type CrmClientStatus } from '@/components/crm/types';
+import { STATUS_CLASS, STATUS_RU } from '@/components/crm/types';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 
+type ScheduleAppointment = {
+  id: string;
+  clientId?: string;
+  startsAt: string;
+  service: string;
+  clientName: string;
+  clientPhone?: string;
+  clientStatus?: CrmClientStatus;
+  clientVisitsCount?: number;
+  clientDiscountPercent?: number;
+  masterName?: string;
+  masterSpecialty?: string;
+  visitStatus: string;
+  sequenceNumber?: number;
+};
+
 type ScheduleSlot = {
   time: string;
   label: string;
   status: 'free' | 'busy';
-  appointment?: {
-    id: string;
-    startsAt: string;
-    service: string;
-    clientName: string;
-    visitStatus: string;
-  };
+  appointment?: ScheduleAppointment;
 };
 
 type ScheduleMaster = {
@@ -32,19 +45,59 @@ type ScheduleResponse = {
   dayStart: string;
   dayEnd: string;
   masters: ScheduleMaster[];
-  appointments: Array<{
-    id: string;
-    masterName: string;
-    startsAt: string;
-    service: string;
-    clientName: string;
-    clientPhone: string;
-    visitStatus: string;
-  }>;
+  appointments: ScheduleAppointment[];
 };
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  });
+}
+
+function ScheduleClientCard({ appointment }: { appointment: ScheduleAppointment }) {
+  const status = appointment.clientStatus;
+  return (
+    <div className="rounded-xl border border-stroke bg-white/50 p-4 dark:border-white/[0.08] dark:bg-white/[0.02]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-lg font-semibold text-zinc-900 dark:text-white">{appointment.clientName}</div>
+          <div className="mt-0.5 text-sm text-muted">
+            {appointment.clientPhone || 'Телефон не указан'}
+            {appointment.clientVisitsCount != null ? ` · Визитов: ${appointment.clientVisitsCount}` : ''}
+          </div>
+        </div>
+        {status ?
+          <Badge className={STATUS_CLASS[status]}>{STATUS_RU[status]}</Badge>
+        : null}
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-stroke/80 bg-zinc-50/80 px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Время</div>
+          <div className="mt-1 text-[15px] font-semibold tabular-nums">{formatTime(appointment.startsAt)}</div>
+        </div>
+        <div className="rounded-lg border border-stroke/80 bg-zinc-50/80 px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Мастер</div>
+          <div className="mt-1 text-[15px] font-semibold">
+            {appointment.masterName ?? '—'}
+            {appointment.masterSpecialty ?
+              <span className="block text-xs font-normal text-muted">{appointment.masterSpecialty}</span>
+            : null}
+          </div>
+        </div>
+        <div className="rounded-lg border border-stroke/80 bg-zinc-50/80 px-3 py-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Услуга</div>
+          <div className="mt-1 text-[15px] font-semibold">{appointment.service}</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function MasterScheduleBoard() {
@@ -61,7 +114,7 @@ export function MasterScheduleBoard() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="Расписание мастеров" description="Зелёное — свободно, красное — занято. Внизу список всех записей на день." />
+        <CardHeader title="Расписание мастеров" description="Зелёное — свободно, красное — занято. Ниже карточки клиентов с временем, мастером и услугой." />
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-muted">
             Дата
@@ -79,10 +132,10 @@ export function MasterScheduleBoard() {
         <Skeleton className="h-64" />
       : !data?.masters.length ?
         <Card>
-          <p className="p-4 text-sm text-muted">Добавьте мастеров в разделе «Мастера», чтобы видеть расписание.</p>
+          <p className="p-4 text-sm text-muted">Мастера не добавлены — расписание появится после настройки мастеров.</p>
         </Card>
       : <div className="overflow-x-auto rounded-xl border border-stroke dark:border-white/[0.08]">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-stroke bg-black/[0.02] dark:border-white/[0.08]">
                 <th className="px-3 py-2 text-left font-semibold">Время</th>
@@ -103,6 +156,7 @@ export function MasterScheduleBoard() {
                   {data.masters.map((m) => {
                     const slot = m.slots[rowIdx]!;
                     const busy = slot.status === 'busy';
+                    const appt = slot.appointment;
                     return (
                       <td
                         key={`${m.id}-${rowIdx}`}
@@ -112,12 +166,12 @@ export function MasterScheduleBoard() {
                             'bg-rose-500/15 text-rose-900 dark:text-rose-200'
                           : 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200',
                         )}
-                        title={busy ? slot.appointment?.clientName : 'Свободно'}
                       >
-                        {busy ?
+                        {busy && appt ?
                           <>
-                            <div className="font-semibold">{slot.appointment?.clientName}</div>
-                            <div>{slot.appointment?.service}</div>
+                            <div className="font-semibold">{appt.clientName}</div>
+                            <div className="tabular-nums">{formatTime(appt.startsAt)}</div>
+                            <div>{appt.service}</div>
                           </>
                         : 'Свободно'}
                       </td>
@@ -132,24 +186,10 @@ export function MasterScheduleBoard() {
 
       {data?.appointments.length ?
         <Card>
-          <CardHeader title="Записи на день" description="Время и услуга по каждому мастеру." />
-          <div className="space-y-2">
+          <CardHeader title="Записи на день" description="Карточка клиента, время, мастер и услуга." />
+          <div className="space-y-3">
             {data.appointments.map((a) => (
-              <div
-                key={a.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stroke px-3 py-2 dark:border-white/[0.08]"
-              >
-                <div>
-                  <div className="font-medium">{a.clientName}</div>
-                  <div className="text-xs text-muted">{a.clientPhone || 'без тел.'}</div>
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">{a.masterName}</span>
-                  <span className="mx-2 text-muted">·</span>
-                  {new Date(a.startsAt).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                </div>
-                <div className="text-sm font-medium">{a.service}</div>
-              </div>
+              <ScheduleClientCard key={a.id} appointment={a} />
             ))}
           </div>
         </Card>

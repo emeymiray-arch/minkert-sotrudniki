@@ -4,7 +4,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
-import { isManagerPath, isMasterPath } from '@/lib/role-home';
+import { isManagerPath, isMasterPath, isViewerPath } from '@/lib/role-home';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthProvider, useAuth } from '@/context/auth';
 import { ThemeProvider } from '@/context/theme';
@@ -83,6 +83,10 @@ function ProtectedLayout() {
   }
 
   if (user?.role === 'MANAGER' && !isManagerPath(pathname)) {
+    return <Navigate to="/crm" replace />;
+  }
+
+  if (user?.role === 'VIEWER' && !isViewerPath(pathname)) {
     return <Navigate to="/crm" replace />;
   }
 

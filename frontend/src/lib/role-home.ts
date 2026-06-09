@@ -2,7 +2,7 @@ import type { UserRole } from '@/lib/types';
 
 /** Стартовая страница после входа по роли. */
 export function homePathForRole(role?: UserRole | string): string {
-  if (role === 'LOYALTY' || role === 'MASTER' || role === 'MANAGER') return '/crm';
+  if (role === 'LOYALTY' || role === 'MASTER' || role === 'MANAGER' || role === 'VIEWER') return '/crm';
   return '/';
 }
 
@@ -18,4 +18,9 @@ export function isManagerPath(pathname: string): boolean {
 /** Разрешённые пути для мастера (CRM + уведомления). */
 export function isMasterPath(pathname: string): boolean {
   return roleAllowsPath(pathname, ['/crm', '/settings']);
+}
+
+/** Разрешённые пути для наблюдателя — только расписание CRM. */
+export function isViewerPath(pathname: string): boolean {
+  return roleAllowsPath(pathname, ['/crm']);
 }

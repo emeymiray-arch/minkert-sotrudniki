@@ -85,6 +85,9 @@ function navItemsForRole(role?: UserRole) {
       (item) => item.to === '/crm' || item.to === '/loyalty' || item.to === '/finansy' || item.to === '/settings',
     );
   }
+  if (role === 'VIEWER') {
+    return [{ to: '/crm', label: 'Расписание', icon: Users2, end: false }];
+  }
   return navItems;
 }
 

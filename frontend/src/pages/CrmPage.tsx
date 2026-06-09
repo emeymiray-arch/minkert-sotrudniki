@@ -96,6 +96,7 @@ export default function CrmPage() {
   const isAdmin = user?.role === 'ADMIN';
   const isManager = user?.role === 'MANAGER';
   const isMaster = user?.role === 'MASTER';
+  const isViewer = user?.role === 'VIEWER';
   const canWrite = isAdmin || isManager;
   const qc = useQueryClient();
   const [tab, setTab] = React.useState('clients');
@@ -294,6 +295,15 @@ export default function CrmPage() {
     const masterSalary = Math.round(base * 0.18) + extra;
     return { base, pct, discountAmount, finalPrice, masterSalary };
   }, [procedureCost, procedureDiscount, extraCost, selectedProcedureClient?.discountPercent]);
+
+  if (isViewer) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Расписание" description="Записи на день: карточка клиента, время, мастер и услуга." />
+        <MasterScheduleBoard />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

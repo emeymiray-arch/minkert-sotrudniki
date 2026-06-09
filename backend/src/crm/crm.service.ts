@@ -180,8 +180,17 @@ export class CrmService {
         ...(salonId?.trim() ? { salonId: salonId.trim() } : {}),
       },
       include: {
-        client: { select: { fullName: true, phone: true } },
-        master: { select: { id: true, name: true } },
+        client: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            status: true,
+            visitsCount: true,
+            discountPercent: true,
+          },
+        },
+        master: { select: { id: true, name: true, specialty: true } },
       },
       orderBy: { startsAt: 'asc' },
     });
@@ -204,9 +213,14 @@ export class CrmService {
           status: 'busy' as const,
           appointment: {
             id: hit.id,
+            clientId: hit.client.id,
             startsAt: hit.startsAt.toISOString(),
             service: hit.service,
             clientName: hit.client.fullName,
+            clientPhone: hit.client.phone,
+            clientStatus: hit.client.status,
+            clientVisitsCount: hit.client.visitsCount,
+            masterName: hit.master?.name ?? '—',
             visitStatus: hit.visitStatus,
           },
         };
@@ -223,13 +237,18 @@ export class CrmService {
       masters: board,
       appointments: appointments.map((a) => ({
         id: a.id,
+        clientId: a.client.id,
         masterId: a.masterId,
         masterName: a.master?.name ?? '—',
+        masterSpecialty: a.master?.specialty ?? '',
         salonId: a.salonId,
         startsAt: a.startsAt.toISOString(),
         service: a.service,
         clientName: a.client.fullName,
         clientPhone: a.client.phone,
+        clientStatus: a.client.status,
+        clientVisitsCount: a.client.visitsCount,
+        clientDiscountPercent: a.client.discountPercent,
         visitStatus: a.visitStatus,
         sequenceNumber: a.sequenceNumber,
       })),
