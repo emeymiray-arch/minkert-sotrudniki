@@ -1,8 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays } from '../common/date/week';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  computeIntervalCompliance,
+  minIntervalDaysForSequence,
+} from './crm-interval.util';
 
 function normalizePhone(raw?: string) {
   return (raw ?? '').replace(/[^\d+]/g, '');
@@ -69,6 +73,91 @@ export class CrmService {
     return null;
   }
 
+  private enrichClientRow(
+    c: {
+      id: string;
+      fullName: string;
+      phone: string;
+      phoneNormalized: string;
+      note: string;
+      status: CrmClientStatus;
+      warned: boolean;
+      totalSpent: number;
+      visitsCount: number;
+      lastProcedureAt: Date | null;
+      recommendedNextAt: Date | null;
+      procedures?: Array<{ intervalDays: number; procedureDate: Date; service: string; sequenceNumber?: number }>;
+      appointments?: unknown[];
+    },
+    loyaltyStamps?: number,
+  ) {
+    const compliance = computeIntervalCompliance(c.visitsCount, c.lastProcedureAt);
+    const lastProc = c.procedures?.[0];
+    return {
+      ...c,
+      lastProcedureAt: dateOnlyIso(c.lastProcedureAt),
+      recommendedNextAt: dateOnlyIso(c.recommendedNextAt),
+      loyaltyStamps: loyaltyStamps ?? null,
+      interval: compliance,
+      lastProcedure: lastProc ?
+        {
+          service: lastProc.service,
+          intervalDays: lastProc.intervalDays,
+          procedureDate: dateOnlyIso(lastProc.procedureDate),
+          sequenceNumber: lastProc.sequenceNumber,
+        }
+      : null,
+    };
+  }
+
+  private async loyaltyStampCount(phoneNormalized: string) {
+    if (!phoneNormalized) return null;
+    const row = await this.prisma.loyaltyClient.findFirst({
+      where: { phoneNormalized },
+      include: { stamps: true },
+    });
+    return row ? row.stamps.length : null;
+  }
+
+  /** Первая процедура → карточка в программе лояльности (если есть телефон). */
+  private async ensureLoyaltyForFirstVisit(client: {
+    fullName: string;
+    phone: string;
+    phoneNormalized: string;
+    visitsCount: number;
+  }) {
+    if (client.visitsCount > 0) return null;
+    const digits = client.phoneNormalized.replace(/\D/g, '');
+    if (digits.length < 10) return null;
+
+    const existing = await this.prisma.loyaltyClient.findFirst({
+      where: { phoneNormalized: client.phoneNormalized },
+    });
+    if (existing) return existing;
+
+    return this.prisma.loyaltyClient.create({
+      data: {
+        name: client.fullName,
+        phone: client.phone,
+        phoneNormalized: client.phoneNormalized,
+      },
+    });
+  }
+
+  async deleteClient(id: string) {
+    const row = await this.prisma.crmClient.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Клиент не найден');
+    await this.prisma.crmClient.delete({ where: { id } });
+    return { ok: true, id };
+  }
+
+  async clientIntervalStatus(clientId: string, plannedAt?: string) {
+    const client = await this.prisma.crmClient.findUnique({ where: { id: clientId } });
+    if (!client) throw new NotFoundException('Клиент не найден');
+    const ref = plannedAt ? parseDateTime(plannedAt) : utcToday();
+    return computeIntervalCompliance(client.visitsCount, client.lastProcedureAt, ref);
+  }
+
   async listClients(q?: string, phone?: string, user?: JwtUserPayload) {
     const where: Record<string, unknown> = {};
     const nameFilter = this.buildNameFilter(q);
@@ -77,7 +166,7 @@ export class CrmService {
     if (normalizedPhone) where.phoneNormalized = { contains: normalizedPhone };
     this.ensureMasterScope(where, user);
 
-    return this.prisma.crmClient.findMany({
+    const rows = await this.prisma.crmClient.findMany({
       where,
       include: {
         appointments: {
@@ -87,12 +176,19 @@ export class CrmService {
         procedures: {
           orderBy: { procedureDate: 'desc' },
           take: 1,
-          select: { intervalDays: true, procedureDate: true, service: true },
+          select: { intervalDays: true, procedureDate: true, service: true, sequenceNumber: true },
         },
       },
       orderBy: { updatedAt: 'desc' },
       take: 200,
     });
+
+    return Promise.all(
+      rows.map(async (c) => {
+        const stamps = await this.loyaltyStampCount(c.phoneNormalized);
+        return this.enrichClientRow(c, stamps ?? undefined);
+      }),
+    );
   }
 
   async getClient(id: string) {
@@ -110,7 +206,30 @@ export class CrmService {
       },
     });
     if (!row) throw new BadRequestException('Клиент не найден');
-    return row;
+    const stamps = await this.loyaltyStampCount(row.phoneNormalized);
+    return {
+      ...this.enrichClientRow(
+        {
+          ...row,
+          procedures: row.procedures.map((p) => ({
+            intervalDays: p.intervalDays,
+            procedureDate: p.procedureDate,
+            service: p.service,
+            sequenceNumber: p.sequenceNumber,
+          })),
+        },
+        stamps ?? undefined,
+      ),
+      procedures: row.procedures.map((p) => ({
+        ...p,
+        procedureDate: dateOnlyIso(p.procedureDate),
+        nextVisitDate: dateOnlyIso(p.nextVisitDate),
+      })),
+      appointments: row.appointments.map((a) => ({
+        ...a,
+        startsAt: a.startsAt.toISOString(),
+      })),
+    };
   }
 
   async createClient(body: {
@@ -175,12 +294,19 @@ export class CrmService {
     const intervalDays = Math.max(0, Math.round(Number(body.intervalDays)));
     if (!intervalDays) throw new BadRequestException('Интервал обязателен');
 
+    const total = await this.prisma.crmProcedure.count({ where: { clientId } });
+    const nextSeq = total + 1;
+    const minInterval = minIntervalDaysForSequence(nextSeq);
+    if (intervalDays < minInterval) {
+      throw new BadRequestException(
+        `Для процедуры №${nextSeq} минимальный интервал — ${minInterval} дн. (указано ${intervalDays}).`,
+      );
+    }
+
     const explicitNext = parseDate(body.nextVisitDate);
     const computedNext = addUtcDays(procedureDate, intervalDays);
     const recommendedNext = explicitNext ?? computedNext;
     const today = utcToday();
-
-    const total = await this.prisma.crmProcedure.count({ where: { clientId } });
 
     return this.prisma.$transaction(async (tx) => {
       const procedure = await tx.crmProcedure.create({
@@ -191,7 +317,7 @@ export class CrmService {
           service,
           cost,
           intervalDays,
-          sequenceNumber: total + 1,
+          sequenceNumber: nextSeq,
           masterComment: body.masterComment?.trim() ?? '',
           photosBeforeAfter: body.photosBeforeAfter as object | undefined,
           nextVisitDate: recommendedNext,
@@ -200,7 +326,7 @@ export class CrmService {
         },
       });
 
-      await tx.crmClient.update({
+      const client = await tx.crmClient.update({
         where: { id: clientId },
         data: {
           totalSpent: { increment: cost },
@@ -211,23 +337,94 @@ export class CrmService {
         },
       });
 
+      if (nextSeq === 1) {
+        await this.ensureLoyaltyForFirstVisit(client);
+      }
+
       return procedure;
     });
   }
 
-  async createAppointment(body: { clientId: string; masterId?: string | null; service: string; startsAt: string; comment?: string }) {
+  async createAppointment(body: {
+    clientId?: string;
+    newClient?: { fullName: string; phone?: string };
+    masterId?: string | null;
+    service: string;
+    startsAt: string;
+    sequenceNumber?: number;
+    comment?: string;
+    forceInterval?: boolean;
+  }) {
     const startsAt = parseDateTime(body.startsAt);
     const service = body.service?.trim();
     if (!service) throw new BadRequestException('Услуга обязательна');
-    return this.prisma.crmAppointment.create({
+
+    let clientId = body.clientId?.trim();
+    let client =
+      clientId ?
+        await this.prisma.crmClient.findUnique({ where: { id: clientId } })
+      : null;
+
+    if (!client && body.newClient?.fullName?.trim()) {
+      const created = await this.createClient({
+        fullName: body.newClient.fullName,
+        phone: body.newClient.phone,
+      });
+      client = created;
+      clientId = created.id;
+    }
+
+    if (!client || !clientId) {
+      throw new BadRequestException('Укажите клиента или создайте нового (ФИО)');
+    }
+
+    const sequenceNumber = Math.max(1, Math.round(Number(body.sequenceNumber ?? client.visitsCount + 1)));
+
+    const compliance = computeIntervalCompliance(client.visitsCount, client.lastProcedureAt, startsAt);
+    if (!compliance.intervalOk && !body.forceInterval) {
+      throw new BadRequestException(compliance.message);
+    }
+
+    const appointment = await this.prisma.crmAppointment.create({
       data: {
-        clientId: body.clientId,
+        clientId,
         masterId: body.masterId ?? null,
         service,
+        sequenceNumber,
         startsAt,
         comment: body.comment?.trim() ?? '',
       },
+      include: {
+        client: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            status: true,
+            visitsCount: true,
+            lastProcedureAt: true,
+            recommendedNextAt: true,
+          },
+        },
+      },
     });
+
+    let loyaltyCreated = false;
+    if (sequenceNumber === 1 && client.visitsCount === 0) {
+      const loyalty = await this.ensureLoyaltyForFirstVisit(client);
+      loyaltyCreated = Boolean(loyalty);
+    }
+
+    await this.prisma.crmClient.update({
+      where: { id: clientId },
+      data: { status: CrmClientStatus.GREEN },
+    });
+
+    return {
+      appointment,
+      intervalWarning: compliance.intervalOk ? null : compliance.message,
+      loyaltyCreated,
+    };
   }
 
   async listAppointments(from?: string, to?: string, masterId?: string, user?: JwtUserPayload) {
@@ -256,7 +453,19 @@ export class CrmService {
       },
       orderBy: { startsAt: 'asc' },
       take: 500,
-    });
+    }).then((rows) =>
+      rows.map((a) => {
+        const compliance = computeIntervalCompliance(
+          a.client.visitsCount,
+          a.client.lastProcedureAt,
+          a.startsAt,
+        );
+        return {
+          ...a,
+          interval: compliance,
+        };
+      }),
+    );
   }
 
   async updateAppointmentStatus(id: string, visitStatus: CrmVisitStatus) {
@@ -326,6 +535,8 @@ export class CrmService {
           daysUntilNext,
           urgency,
           requiresRepeatContact: c.requiresRepeatContact,
+          minIntervalDays: minIntervalDaysForSequence(c.visitsCount + 1),
+          daysSinceLast: c.lastProcedureAt ? daysBetween(c.lastProcedureAt, today) : null,
         };
       })
       .sort((a, b) => {

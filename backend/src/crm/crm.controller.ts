@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -41,6 +41,20 @@ export class CrmController {
     return this.crm.updateClient(id, body);
   }
 
+  @Delete('clients/:id')
+  @Roles(UserRole.ADMIN)
+  deleteClient(@Param('id') id: string) {
+    return this.crm.deleteClient(id);
+  }
+
+  @Get('clients/:id/interval-status')
+  intervalStatus(
+    @Param('id') id: string,
+    @Query('plannedAt') plannedAt?: string,
+  ) {
+    return this.crm.clientIntervalStatus(id, plannedAt);
+  }
+
   @Post('clients/:id/procedures')
   @Roles(UserRole.ADMIN)
   addProcedure(
@@ -67,7 +81,16 @@ export class CrmController {
   @Roles(UserRole.ADMIN)
   createAppointment(
     @Body()
-    body: { clientId: string; masterId?: string | null; service: string; startsAt: string; comment?: string },
+    body: {
+      clientId?: string;
+      newClient?: { fullName: string; phone?: string };
+      masterId?: string | null;
+      service: string;
+      startsAt: string;
+      sequenceNumber?: number;
+      comment?: string;
+      forceInterval?: boolean;
+    },
   ) {
     return this.crm.createAppointment(body);
   }

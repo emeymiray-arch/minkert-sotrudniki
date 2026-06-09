@@ -447,15 +447,16 @@ model CrmProcedure {
 }
 
 model CrmAppointment {
-  id          String         @id @default(cuid())
-  clientId    String
-  client      CrmClient      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  masterId    String?
-  master      Employee?      @relation(fields: [masterId], references: [id], onDelete: SetNull)
-  service     String
-  startsAt    DateTime
-  comment     String         @default("")
-  visitStatus CrmVisitStatus @default(SCHEDULED)
+  id             String         @id @default(cuid())
+  clientId       String
+  client         CrmClient      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  masterId       String?
+  master         Employee?      @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  service        String
+  sequenceNumber Int            @default(1)
+  startsAt       DateTime
+  comment        String         @default("")
+  visitStatus    CrmVisitStatus @default(SCHEDULED)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
