@@ -11,15 +11,31 @@ import { useTheme } from '@/context/theme';
 import { useAuth } from '@/context/auth';
 import { cnRoleRu } from '@/lib/format';
 import { apiJson, getApiBaseUrl } from '@/lib/http';
-import type { ManagerKpiSummary } from '@/lib/types';
+import type { ManagerKpiSummary, UserRole } from '@/lib/types';
 import { AccountsManager } from '@/components/settings/AccountsManager';
 import { PushNotificationHelp } from '@/components/settings/PushNotificationHelp';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Input } from '@/components/ui/input';
 
+function settingsDescription(role?: UserRole): string {
+  switch (role) {
+    case 'MANAGER':
+      return 'Тема, профиль и уведомления для работы в салоне.';
+    case 'MASTER':
+      return 'Тема, профиль и уведомления о записях.';
+    case 'ADMIN':
+      return 'Тема, профиль, уведомления, планы и аккаунты сотрудников.';
+    case 'VIEWER':
+      return 'Тема, профиль и KPI управляющего.';
+    default:
+      return 'Тема и профиль.';
+  }
+}
+
 export default function SettingsPage() {
   const { mode, setMode } = useTheme();
   const { user, setUserProfile } = useAuth();
+  const role = user?.role;
   const qc = useQueryClient();
   const { subscribe: enablePush } = usePushNotifications();
   const [name, setName] = React.useState(user?.name ?? '');
@@ -32,6 +48,11 @@ export default function SettingsPage() {
   const [revenuePlan, setRevenuePlan] = React.useState('');
   const [clientPlan, setClientPlan] = React.useState('');
 
+  const isAdmin = role === 'ADMIN';
+  const showPush = role === 'ADMIN' || role === 'MANAGER' || role === 'MASTER';
+  const showKpi = role === 'ADMIN' || role === 'VIEWER';
+  const showApi = role === 'ADMIN';
+
   const apiHint = getApiBaseUrl();
   const planMonth = React.useMemo(() => {
     const n = new Date();
@@ -41,7 +62,7 @@ export default function SettingsPage() {
   const businessPlan = useQuery({
     queryKey: ['insights', 'plan', planMonth],
     queryFn: () => apiJson<{ month: string; revenuePlan?: number; clientPlan?: number }>(`/insights/plan?month=${planMonth}`),
-    enabled: user?.role === 'ADMIN',
+    enabled: isAdmin,
   });
 
   React.useEffect(() => {
@@ -53,7 +74,8 @@ export default function SettingsPage() {
   const managerKpi = useQuery({
     queryKey: ['analytics', 'manager-kpi'],
     queryFn: () => apiJson<ManagerKpiSummary>('/analytics/manager-kpi'),
-    refetchOnWindowFocus: true,
+    enabled: showKpi,
+    refetchOnWindowFocus: showKpi,
   });
 
   React.useEffect(() => {
@@ -64,7 +86,7 @@ export default function SettingsPage() {
 
   const updateProfile = useMutation({
     mutationFn: () =>
-      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY'; linkedEmployeeId?: string | null }>(
+      apiJson<{ id: string; name: string; email: string; role: UserRole; linkedEmployeeId?: string | null }>(
         '/users/me',
         {
           method: 'PATCH',
@@ -73,7 +95,7 @@ export default function SettingsPage() {
       ),
     onSuccess: (next) => {
       setUserProfile(next);
-      toast.success('Профиль управляющего обновлён');
+      toast.success('Профиль сохранён');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Не удалось обновить профиль'),
   });
@@ -94,20 +116,17 @@ export default function SettingsPage() {
 
   const createAccount = useMutation({
     mutationFn: () =>
-      apiJson<{ id: string; email: string; name: string; role: 'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY' }>(
-        '/auth/accounts',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            name: accName.trim(),
-            email: accEmail.trim(),
-            password: accPassword,
-            role: accRole,
-            linkedEmployeeId:
-              accRole === 'VIEWER' || accRole === 'MASTER' ? (accLinkedEmployeeId.trim() || undefined) : undefined,
-          }),
-        },
-      ),
+      apiJson<{ id: string; email: string; name: string; role: UserRole }>('/auth/accounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: accName.trim(),
+          email: accEmail.trim(),
+          password: accPassword,
+          role: accRole,
+          linkedEmployeeId:
+            accRole === 'VIEWER' || accRole === 'MASTER' ? (accLinkedEmployeeId.trim() || undefined) : undefined,
+        }),
+      }),
     onSuccess: async (next) => {
       toast.success(`Аккаунт создан: ${next.email} (${cnRoleRu(next.role)})`);
       await qc.invalidateQueries({ queryKey: ['users', 'list'] });
@@ -122,127 +141,118 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <PageHeader
-        title="Настройки"
-        description="Тема и профиль. KPI управляющего: личные задачи в Контроле + результаты команды."
-      />
+      <PageHeader title="Настройки" description={settingsDescription(role)} />
 
       <Card>
-        <CardHeader title="Локальная персонализация" description="Выбор сохранён в браузере, без лишней нагрузки на вашу машину и бэкенд." />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-lg border border-stroke bg-[hsl(var(--panel))] p-4 dark:border-white/[0.06]">
-            <div className="text-xs uppercase tracking-[0.16em] text-muted dark:text-white/45">Тема</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant={mode === 'dark' ? 'primary' : 'outline'} onClick={() => setMode('dark')}>
-                Тёмная
-              </Button>
-              <Button variant={mode === 'light' ? 'primary' : 'outline'} onClick={() => setMode('light')}>
-                Светлая
-              </Button>
-              <Button variant={mode === 'system' ? 'primary' : 'outline'} onClick={() => setMode('system')}>
-                Системная
-              </Button>
-            </div>
-            <div className="mt-3 text-xs text-muted dark:text-white/48">По умолчанию — тёмный премиальный интерфейс с неоновыми акцентами.</div>
-          </div>
-
-          <div className="rounded-lg border border-stroke bg-[hsl(var(--panel))] p-4 dark:border-white/[0.06]">
-            <div className="text-xs uppercase tracking-[0.16em] text-muted dark:text-white/45">Профиль</div>
-            <div className="mt-3 space-y-3 text-sm">
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" />
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
-              <Button onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
-                Сохранить профиль управляющего
-              </Button>
-              <Badge tone="neutral" className="mt-2">
-                {cnRoleRu(user?.role ?? '—')}
-              </Badge>
-              {user?.role === 'VIEWER' ?
-                <p className="mt-3 text-xs leading-relaxed text-muted dark:text-white/50">
-                  Аккаунт управляющего: разделы «Обзор» и «Аналитика» показывают KPI команды из чек-листов без ручного ввода.
-                </p>
-              : null}
-            </div>
-          </div>
+        <CardHeader title="Тема" description="Сохраняется в этом браузере на вашем устройстве." />
+        <div className="flex flex-wrap gap-2">
+          <Button variant={mode === 'dark' ? 'primary' : 'outline'} onClick={() => setMode('dark')}>
+            Тёмная
+          </Button>
+          <Button variant={mode === 'light' ? 'primary' : 'outline'} onClick={() => setMode('light')}>
+            Светлая
+          </Button>
+          <Button variant={mode === 'system' ? 'primary' : 'outline'} onClick={() => setMode('system')}>
+            Системная
+          </Button>
         </div>
       </Card>
 
-      {user && ['ADMIN', 'MANAGER', 'MASTER'].includes(user.role) ?
+      <Card>
+        <CardHeader title="Профиль" description="Имя и email для входа в систему." />
+        <div className="space-y-3 text-sm">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" />
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@company.com" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
+              Сохранить
+            </Button>
+            <Badge tone="neutral">{cnRoleRu(role ?? '—')}</Badge>
+          </div>
+          {role === 'VIEWER' ?
+            <p className="text-xs leading-relaxed text-muted dark:text-white/50">
+              Разделы «Обзор» и «Аналитика» показывают KPI команды из чек-листов.
+            </p>
+          : null}
+        </div>
+      </Card>
+
+      {showPush ?
         <PushNotificationHelp onEnable={() => void enablePush()} />
       : null}
 
-      <Card>
-        <CardHeader
-          title="KPI управляющего"
-          description="Два блока: задачи управляющего в Контроле и результаты команды по KPI."
-        />
-        {managerKpi.isLoading ?
-          <Skeleton className="h-[140px]" />
-        : managerKpi.data ?
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">Задачи управляющего</div>
-                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">
-                  {managerKpi.data.managerTasks?.kpi ?? 0}%
+      {showKpi ?
+        <Card>
+          <CardHeader
+            title="KPI управляющего"
+            description="Задачи в Контроле и результаты команды по KPI."
+          />
+          {managerKpi.isLoading ?
+            <Skeleton className="h-[140px]" />
+          : managerKpi.data ?
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">Задачи управляющего</div>
+                  <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">
+                    {managerKpi.data.managerTasks?.kpi ?? 0}%
+                  </div>
+                  <div className="mt-1 text-xs text-muted dark:text-white/50">
+                    Решено: {managerKpi.data.managerTasks?.solved ?? 0} из {managerKpi.data.managerTasks?.total ?? 0}
+                  </div>
                 </div>
-                <div className="mt-1 text-xs text-muted dark:text-white/50">
-                  Решено: {managerKpi.data.managerTasks?.solved ?? 0} из {managerKpi.data.managerTasks?.total ?? 0}
+                <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">Результаты команды</div>
+                  <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">
+                    {managerKpi.data.teamResults?.kpi ?? managerKpi.data.weekly.kpi}%
+                  </div>
+                  <div className="mt-1 text-xs text-muted dark:text-white/50">Неделя с {managerKpi.data.weekAnchor}</div>
                 </div>
               </div>
-              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">Результаты команды</div>
-                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">
-                  {managerKpi.data.teamResults?.kpi ?? managerKpi.data.weekly.kpi}%
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.daily.label}</div>
+                  <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.daily.kpi}%</div>
+                  <div className="mt-1 text-xs text-muted dark:text-white/50">
+                    {managerKpi.data.daily.weekday}, {managerKpi.data.asOf}
+                  </div>
                 </div>
-                <div className="mt-1 text-xs text-muted dark:text-white/50">Неделя с {managerKpi.data.weekAnchor}</div>
+                <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.weekly.label}</div>
+                  <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.weekly.kpi}%</div>
+                  <div className="mt-1 text-xs text-muted dark:text-white/50">
+                    WoW: {managerKpi.data.weekly.weekOverWeekTrend >= 0 ? '+' : ''}
+                    {managerKpi.data.weekly.weekOverWeekTrend} п.п.
+                  </div>
+                </div>
+                <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.monthly.label}</div>
+                  <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.monthly.kpi}%</div>
+                  <div className="mt-1 text-xs text-muted dark:text-white/50">{managerKpi.data.month}</div>
+                </div>
               </div>
+              <p className="text-xs leading-relaxed text-muted dark:text-white/50">
+                Активных сотрудников в расчёте: {managerKpi.data.activeEmployees}.
+              </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.daily.label}</div>
-                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.daily.kpi}%</div>
-                <div className="mt-1 text-xs text-muted dark:text-white/50">
-                  {managerKpi.data.daily.weekday}, {managerKpi.data.asOf}
-                </div>
-              </div>
-              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.weekly.label}</div>
-                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.weekly.kpi}%</div>
-                <div className="mt-1 text-xs text-muted dark:text-white/50">
-                  WoW: {managerKpi.data.weekly.weekOverWeekTrend >= 0 ? '+' : ''}
-                  {managerKpi.data.weekly.weekOverWeekTrend} п.п.
-                </div>
-              </div>
-              <div className="rounded-xl border border-stroke bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="text-xs uppercase tracking-wider text-muted dark:text-white/45">{managerKpi.data.monthly.label}</div>
-                <div className="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{managerKpi.data.monthly.kpi}%</div>
-                <div className="mt-1 text-xs text-muted dark:text-white/50">{managerKpi.data.month}</div>
-              </div>
-            </div>
-            <p className="text-xs leading-relaxed text-muted dark:text-white/50">
-              Активных сотрудников в расчёте: {managerKpi.data.activeEmployees}. Управляющий с ролью «Наблюдатель» видит те же цифры в «Обзор» и «Аналитика».
-            </p>
+          : <p className="text-sm text-muted">Нет данных — добавьте задачи и дождитесь отметок в чек-листах.</p>}
+        </Card>
+      : null}
+
+      {showApi ?
+        <Card>
+          <CardHeader title="Интеграция API" description="Технический адрес бэкенда." />
+          <div className="rounded-lg border border-dashed border-stroke bg-black/[0.02] p-4 text-[12px] font-mono text-zinc-800 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white/80">
+            {apiHint}
           </div>
-        : <p className="text-sm text-muted">Нет данных — добавьте задачи и дождитесь отметок в чек-листах.</p>}
-      </Card>
+        </Card>
+      : null}
 
-      <Card>
-        <CardHeader title="Интеграция API" description="Для оперативности фронтенд ходит только в REST-бэкенд." />
-        <div className="rounded-lg border border-dashed border-stroke bg-black/[0.02] p-4 text-[12px] font-mono text-zinc-800 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white/80">
-          {apiHint}
-        </div>
-        <div className="mt-4 text-xs text-muted dark:text-white/55">
-          В рабочем контуре вынесите JWT-секреты и строки подключения в менеджер секретов, а переменную `VITE_API_URL`
-          передайте на этапе сборки фронта.
-        </div>
-      </Card>
-
-      {user?.role === 'ADMIN' ?
+      {isAdmin ?
         <Card>
           <CardHeader
             title="План / факт"
-            description={`Ручные цели на ${planMonth} — отображаются на главном экране «Обзор».`}
+            description={`Цели на ${planMonth} — на главном экране «Обзор».`}
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
@@ -264,16 +274,13 @@ export default function SettingsPage() {
         </Card>
       : null}
 
-      {user?.role === 'ADMIN' ?
+      {isAdmin ?
         <AccountsManager />
       : null}
 
-      {user?.role === 'ADMIN' ?
+      {isAdmin ?
         <Card>
-          <CardHeader
-            title="Создать аккаунт"
-            description="Для роли «Лояльность» сотрудник видит только вкладку программы лояльности."
-          />
+          <CardHeader title="Создать аккаунт" description="Новый логин для сотрудника." />
           <div className="grid gap-3 md:grid-cols-2">
             <Input value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="Имя пользователя" />
             <Input value={accEmail} onChange={(e) => setAccEmail(e.target.value)} placeholder="email@company.com" />
@@ -298,7 +305,7 @@ export default function SettingsPage() {
               <Input
                 value={accLinkedEmployeeId}
                 onChange={(e) => setAccLinkedEmployeeId(e.target.value)}
-                placeholder="linkedEmployeeId (опционально)"
+                placeholder="ID карточки сотрудника"
               />
             : null}
           </div>
