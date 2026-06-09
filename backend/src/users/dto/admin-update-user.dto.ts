@@ -1,7 +1,25 @@
-import { IsOptional, IsString } from 'class-validator';
+import { UserRole } from '@prisma/client';
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class AdminUpdateUserDto {
-  /** Привязка к карточке сотрудника: VIEWER сможет менять дни в задачах только этой карточки. Пустая строка или null — снять привязку. */
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  password?: string;
+
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  /** Пустая строка или null — снять привязку к карточке сотрудника. */
   @IsOptional()
   @IsString()
   linkedEmployeeId?: string | null;

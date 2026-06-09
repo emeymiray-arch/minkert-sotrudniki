@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { sendWebPush, vapidPublicKey } from './push.util';
 
 const REMINDER_MINUTES = [120, 60, 30, 10] as const;
 
@@ -10,6 +11,69 @@ export class NotificationsService {
   private lastReminderScan = 0;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  getVapidPublicKey() {
+    return { publicKey: vapidPublicKey() };
+  }
+
+  async savePushSubscription(
+    userId: string,
+    body: { endpoint: string; keys: { p256dh: string; auth: string } },
+  ) {
+    const endpoint = body.endpoint?.trim();
+    if (!endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+      return { ok: false };
+    }
+    await this.prisma.pushSubscription.upsert({
+      where: { userId_endpoint: { userId, endpoint } },
+      create: {
+        userId,
+        endpoint,
+        p256dh: body.keys.p256dh,
+        auth: body.keys.auth,
+      },
+      update: {
+        p256dh: body.keys.p256dh,
+        auth: body.keys.auth,
+      },
+    });
+    return { ok: true };
+  }
+
+  async removePushSubscription(userId: string, endpoint?: string) {
+    if (endpoint?.trim()) {
+      await this.prisma.pushSubscription.deleteMany({ where: { userId, endpoint: endpoint.trim() } });
+    } else {
+      await this.prisma.pushSubscription.deleteMany({ where: { userId } });
+    }
+    return { ok: true };
+  }
+
+  private async pushToRoles(roles: UserRole[], title: string, body: string) {
+    const users = await this.prisma.user.findMany({
+      where: { role: { in: roles } },
+      select: { id: true },
+    });
+    await Promise.all(users.map((u) => this.pushToUser(u.id, title, body)));
+  }
+
+  private async pushToUser(userId: string, title: string, body: string) {
+    const subs = await this.prisma.pushSubscription.findMany({ where: { userId } });
+    await Promise.all(
+      subs.map(async (sub) => {
+        try {
+          await sendWebPush(sub, { title, body });
+        } catch (err) {
+          const code = (err as { statusCode?: number })?.statusCode;
+          if (code === 404 || code === 410) {
+            await this.prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => undefined);
+          } else {
+            this.logger.warn(`Push failed for ${userId}: ${String(err)}`);
+          }
+        }
+      }),
+    );
+  }
 
   async notifyRoles(
     roles: UserRole[],
@@ -25,6 +89,7 @@ export class NotificationsService {
         }),
       ),
     );
+    void this.pushToRoles(roles, title, body);
   }
 
   async notifyUser(userId: string, kind: string, title: string, body: string, payload?: Record<string, unknown>) {

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/context/auth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import type { UserRole } from '@/lib/types';
 import { useTheme } from '@/context/theme';
 import { cnRoleRu } from '@/lib/format';
@@ -146,6 +147,7 @@ const WIDE_ROUTES = new Set(['/finansy']);
 export function AppShell({ children }: { children?: React.ReactNode }) {
   const { logout, user } = useAuth();
   useNotifications();
+  usePushNotifications();
   const { mode, setMode } = useTheme();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const { pathname } = useLocation();

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -12,11 +12,15 @@ import { useAuth } from '@/context/auth';
 import { cnRoleRu } from '@/lib/format';
 import { apiJson, getApiBaseUrl } from '@/lib/http';
 import type { ManagerKpiSummary } from '@/lib/types';
+import { AccountsManager } from '@/components/settings/AccountsManager';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Input } from '@/components/ui/input';
 
 export default function SettingsPage() {
   const { mode, setMode } = useTheme();
   const { user, setUserProfile } = useAuth();
+  const qc = useQueryClient();
+  const { subscribe: enablePush } = usePushNotifications();
   const [name, setName] = React.useState(user?.name ?? '');
   const [email, setEmail] = React.useState(user?.email ?? '');
   const [accName, setAccName] = React.useState('');
@@ -103,8 +107,9 @@ export default function SettingsPage() {
           }),
         },
       ),
-    onSuccess: (next) => {
+    onSuccess: async (next) => {
       toast.success(`Аккаунт создан: ${next.email} (${cnRoleRu(next.role)})`);
+      await qc.invalidateQueries({ queryKey: ['users', 'list'] });
       setAccName('');
       setAccEmail('');
       setAccPassword('');
@@ -252,6 +257,22 @@ export default function SettingsPage() {
             Сохранить план
           </Button>
         </Card>
+      : null}
+
+      {user && ['ADMIN', 'MANAGER', 'MASTER'].includes(user.role) ?
+        <Card>
+          <CardHeader
+            title="Уведомления на телефон"
+            description="Как в WhatsApp: на экране блокировки и в шторке. На iPhone: «Поделиться» → «На экран Домой», затем включите уведомления."
+          />
+          <Button type="button" variant="outline" onClick={() => void enablePush()}>
+            Включить push-уведомления
+          </Button>
+        </Card>
+      : null}
+
+      {user?.role === 'ADMIN' ?
+        <AccountsManager />
       : null}
 
       {user?.role === 'ADMIN' ?

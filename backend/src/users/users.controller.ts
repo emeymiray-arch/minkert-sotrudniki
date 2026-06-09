@@ -28,20 +28,15 @@ export class UsersController {
     return this.users.updateMyProfile(user.sub, dto);
   }
 
+  @Get()
+  @Roles(UserRole.ADMIN)
+  list() {
+    return this.users.listUsers();
+  }
+
   @Patch(':id')
   @Roles(UserRole.ADMIN)
-  async adminUpdate(@Param('id') id: string, @Body() dto: AdminUpdateUserDto) {
-    if (dto.linkedEmployeeId === undefined) {
-      const u = await this.users.requireById(id);
-      return {
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        linkedEmployeeId: u.linkedEmployeeId ?? null,
-      };
-    }
-    const next = dto.linkedEmployeeId === '' ? null : dto.linkedEmployeeId;
-    return this.users.updateUserLinkedEmployee(id, next);
+  adminUpdate(@Param('id') id: string, @Body() dto: AdminUpdateUserDto) {
+    return this.users.adminUpdateUser(id, dto);
   }
 }

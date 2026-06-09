@@ -31,8 +31,22 @@ model User {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   refreshTokens      RefreshToken[]
+  pushSubscriptions  PushSubscription[]
 
   @@index([linkedEmployeeId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, endpoint])
+  @@index([userId])
 }
 
 model RefreshToken {

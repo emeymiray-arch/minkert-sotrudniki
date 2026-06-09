@@ -55,6 +55,72 @@ export class UsersService {
     });
   }
 
+  async listUsers() {
+    return this.prisma.user.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        linkedEmployeeId: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async adminUpdateUser(
+    userId: string,
+    dto: {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: UserRole;
+      linkedEmployeeId?: string | null;
+    },
+  ) {
+    await this.requireById(userId);
+    const data: {
+      name?: string;
+      email?: string;
+      passwordHash?: string;
+      role?: UserRole;
+      linkedEmployeeId?: string | null;
+    } = {};
+
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.email !== undefined) {
+      const normalizedEmail = dto.email.toLowerCase().trim();
+      const existing = await this.findByEmail(normalizedEmail);
+      if (existing && existing.id !== userId) {
+        throw new ConflictException('Email уже занят другим пользователем');
+      }
+      data.email = normalizedEmail;
+    }
+    if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 10);
+    if (dto.role !== undefined) data.role = dto.role;
+    if (dto.linkedEmployeeId !== undefined) {
+      const link = dto.linkedEmployeeId === '' || dto.linkedEmployeeId === null ? null : dto.linkedEmployeeId;
+      if (link) {
+        const emp = await this.prisma.employee.findUnique({ where: { id: link } });
+        if (!emp) throw new NotFoundException('Сотрудник для привязки не найден');
+      }
+      data.linkedEmployeeId = link;
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        linkedEmployeeId: true,
+      },
+    });
+  }
+
   async updateUserLinkedEmployee(userId: string, linkedEmployeeId: string | null) {
     await this.requireById(userId);
     if (linkedEmployeeId) {
