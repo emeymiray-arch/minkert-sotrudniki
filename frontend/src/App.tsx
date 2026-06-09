@@ -45,8 +45,8 @@ function Lazy({ children }: { children: React.ReactNode }) {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 120_000,
-      gcTime: 300_000,
+      staleTime: 180_000,
+      gcTime: 600_000,
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -73,6 +73,15 @@ function ProtectedLayout() {
   }
 
   if (user?.role === 'LOYALTY' && pathname !== '/loyalty' && !pathname.startsWith('/crm')) {
+    return <Navigate to="/crm" replace />;
+  }
+
+  if (user?.role === 'MASTER' && pathname !== '/crm') {
+    return <Navigate to="/crm" replace />;
+  }
+
+  const managerPaths = ['/crm', '/loyalty', '/finansy'];
+  if (user?.role === 'MANAGER' && !managerPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return <Navigate to="/crm" replace />;
   }
 

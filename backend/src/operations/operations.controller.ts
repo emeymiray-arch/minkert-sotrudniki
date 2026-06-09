@@ -27,7 +27,7 @@ import type { FinancePeriod } from './operations-finance.service';
 import { OperationsService } from './operations.service';
 
 @Controller('operations')
-@Roles(UserRole.ADMIN, UserRole.MANAGER)
+@Roles(UserRole.ADMIN)
 export class OperationsController {
   constructor(
     private readonly ops: OperationsService,

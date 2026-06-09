@@ -1,6 +1,6 @@
 export type EmployeeStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
 
-export type UserRole = 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY';
+export type UserRole = 'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY';
 
 export type AuthUser = {
   id: string;

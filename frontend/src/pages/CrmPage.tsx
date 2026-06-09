@@ -92,7 +92,9 @@ function intervalLabelLocal(row: { daysUntilNext: number | null }) {
 export default function CrmPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
-  const isMaster = user?.role === 'MANAGER';
+  const isManager = user?.role === 'MANAGER';
+  const isMaster = user?.role === 'MASTER';
+  const canWrite = isAdmin || isManager;
   const qc = useQueryClient();
   const [tab, setTab] = React.useState('clients');
   const [q, setQ] = React.useState('');
@@ -106,6 +108,9 @@ export default function CrmPage() {
   const [procedureDate, setProcedureDate] = React.useState('');
   const [procedureService, setProcedureService] = React.useState('');
   const [procedureCost, setProcedureCost] = React.useState('');
+  const [procedureDiscount, setProcedureDiscount] = React.useState('');
+  const [extraService, setExtraService] = React.useState('');
+  const [extraCost, setExtraCost] = React.useState('');
   const [intervalDays, setIntervalDays] = React.useState('');
   const [procedureSearch, setProcedureSearch] = React.useState('');
   const dProcedureSearch = useDebouncedValue(procedureSearch, 300);
@@ -197,8 +202,17 @@ export default function CrmPage() {
   });
 
   const patchClientMu = useMutation({
-    mutationFn: ({ id, status, warned }: { id: string; status?: CrmClientStatus; warned?: boolean }) =>
-      apiJson(`/crm/clients/${id}`, { method: 'PATCH', body: JSON.stringify({ status, warned }) }),
+    mutationFn: ({
+      id,
+      status,
+      warned,
+      discountPercent,
+    }: {
+      id: string;
+      status?: CrmClientStatus;
+      warned?: boolean;
+      discountPercent?: number;
+    }) => apiJson(`/crm/clients/${id}`, { method: 'PATCH', body: JSON.stringify({ status, warned, discountPercent }) }),
     onSuccess: invalidateCrm,
   });
 
@@ -242,7 +256,11 @@ export default function CrmPage() {
         body: JSON.stringify({
           procedureDate,
           service: procedureService,
+          basePrice: Number(procedureCost || 0),
           cost: Number(procedureCost || 0),
+          discountPercent: procedureDiscount ? Number(procedureDiscount) : undefined,
+          extraService: extraService.trim() || undefined,
+          extraCost: extraCost ? Number(extraCost) : undefined,
           intervalDays: Number(intervalDays || 0),
         }),
       }),
@@ -250,6 +268,9 @@ export default function CrmPage() {
       setProcedureDate('');
       setProcedureService('');
       setProcedureCost('');
+      setProcedureDiscount('');
+      setExtraService('');
+      setExtraCost('');
       setIntervalDays('');
       setProcedureClientId('');
       setProcedureSearch('');
@@ -260,6 +281,17 @@ export default function CrmPage() {
   });
 
   const selectedProcedureClient = (procedureClientsQ.data ?? []).find((c) => c.id === procedureClientId);
+
+  const procedurePreview = React.useMemo(() => {
+    const base = Number(procedureCost || 0);
+    const pct = Math.min(100, Math.max(0, Number(procedureDiscount || selectedProcedureClient?.discountPercent || 0)));
+    const extra = Number(extraCost || 0);
+    const discountAmount = Math.round((base * pct) / 100);
+    const finalMain = base - discountAmount;
+    const finalPrice = finalMain + extra;
+    const masterSalary = Math.round(base * 0.18) + extra;
+    return { base, pct, discountAmount, finalPrice, masterSalary };
+  }, [procedureCost, procedureDiscount, extraCost, selectedProcedureClient?.discountPercent]);
 
   return (
     <div className="space-y-6">
@@ -314,7 +346,7 @@ export default function CrmPage() {
               <div className="grid gap-2 sm:grid-cols-3">
                 <Input placeholder="ФИО" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                <Button onClick={() => createClientMu.mutate()} disabled={!isAdmin || !fullName.trim() || createClientMu.isPending}>
+                <Button onClick={() => createClientMu.mutate()} disabled={!canWrite || !fullName.trim() || createClientMu.isPending}>
                   Добавить
                 </Button>
               </div>
@@ -330,9 +362,11 @@ export default function CrmPage() {
                       key={c.id}
                       client={c}
                       isAdmin={isAdmin}
+                      canEditDiscount={canWrite}
                       deleting={deleteClientMu.isPending}
                       onStatus={(id, status) => patchClientMu.mutate({ id, status: nextStatus(status) })}
                       onWarn={(id, warned) => patchClientMu.mutate({ id, warned })}
+                      onDiscount={(id, discountPercent) => patchClientMu.mutate({ id, discountPercent })}
                       onDelete={(id) => deleteClientMu.mutate(id)}
                     />
                   ))}
@@ -349,7 +383,7 @@ export default function CrmPage() {
                 description="Поиск по ФИО или новый клиент. Укажите номер процедуры — система проверит интервал 25/35 дней."
               />
               <AppointmentBookingForm
-                disabled={!isAdmin}
+                disabled={!canWrite}
                 pending={createAppointmentMu.isPending}
                 onSubmit={(payload) => createAppointmentMu.mutate(payload)}
               />
@@ -375,6 +409,7 @@ export default function CrmPage() {
                           setProcedureSearch(c.fullName);
                           const next = c.visitsCount + 1;
                           setIntervalDays(String(next <= 3 ? 25 : 35));
+                          setProcedureDiscount(c.discountPercent ? String(c.discountPercent) : '');
                         }}
                       >
                         <span className="font-medium">{c.fullName}</span>
@@ -388,14 +423,35 @@ export default function CrmPage() {
                     {selectedProcedureClient.fullName} — процедура №{selectedProcedureClient.visitsCount + 1}
                   </div>
                 : null}
-                <div className="grid gap-2 sm:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <Input type="date" value={procedureDate} onChange={(e) => setProcedureDate(e.target.value)} />
                   <Input placeholder="Услуга" value={procedureService} onChange={(e) => setProcedureService(e.target.value)} />
-                  <Input placeholder="Стоимость" type="number" value={procedureCost} onChange={(e) => setProcedureCost(e.target.value)} />
+                  <Input placeholder="Цена основной услуги" type="number" value={procedureCost} onChange={(e) => setProcedureCost(e.target.value)} />
+                  <Input
+                    placeholder={`Скидка %${selectedProcedureClient?.discountPercent ? ` (клиент ${selectedProcedureClient.discountPercent}%)` : ''}`}
+                    type="number"
+                    value={procedureDiscount}
+                    onChange={(e) => setProcedureDiscount(e.target.value)}
+                  />
+                  <Input placeholder="Доп. услуга" value={extraService} onChange={(e) => setExtraService(e.target.value)} />
+                  <Input placeholder="Цена доп. услуги" type="number" value={extraCost} onChange={(e) => setExtraCost(e.target.value)} />
                   <Input placeholder="Интервал (дни) *" type="number" value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)} />
                 </div>
+                {procedureCost ?
+                  <div className="rounded-lg border px-3 py-2 text-sm">
+                    <span className="text-rose-600 line-through dark:text-rose-400">{procedurePreview.base.toLocaleString('ru-RU')} ₽</span>
+                    {' → '}
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      {procedurePreview.finalPrice.toLocaleString('ru-RU')} ₽
+                    </span>
+                    {procedurePreview.pct > 0 ?
+                      <span className="ml-2 text-muted">(скидка {procedurePreview.pct}% = −{procedurePreview.discountAmount} ₽)</span>
+                    : null}
+                    <span className="ml-2 text-muted">· ЗП мастера: {procedurePreview.masterSalary.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                : null}
                 <Button
-                  disabled={!isAdmin || !procedureClientId || !procedureDate || !procedureService.trim() || !intervalDays || addProcedureMu.isPending}
+                  disabled={!canWrite || !procedureClientId || !procedureDate || !procedureService.trim() || !intervalDays || addProcedureMu.isPending}
                   onClick={() => addProcedureMu.mutate()}
                 >
                   Добавить процедуру
@@ -428,10 +484,10 @@ export default function CrmPage() {
                         <div className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">{a.interval.message}</div>
                       : null}
                       <div className="mt-3 flex flex-wrap gap-1">
-                        <Button size="sm" variant="outline" disabled={!isAdmin} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'ARRIVED' })}>Пришла</Button>
-                        <Button size="sm" variant="outline" disabled={!isAdmin} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'NO_SHOW' })}>Не пришла</Button>
-                        <Button size="sm" variant="outline" disabled={!isAdmin} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'RESCHEDULED' })}>Перенесла</Button>
-                        <Button size="sm" variant="outline" disabled={!isAdmin} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'CANCELED' })}>Отменила</Button>
+                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'ARRIVED' })}>Пришла</Button>
+                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'NO_SHOW' })}>Не пришла</Button>
+                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'RESCHEDULED' })}>Перенесла</Button>
+                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'CANCELED' })}>Отменила</Button>
                       </div>
                     </div>
                   ))}

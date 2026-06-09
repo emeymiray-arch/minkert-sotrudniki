@@ -22,7 +22,7 @@ export default function SettingsPage() {
   const [accName, setAccName] = React.useState('');
   const [accEmail, setAccEmail] = React.useState('');
   const [accPassword, setAccPassword] = React.useState('');
-  const [accRole, setAccRole] = React.useState<'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY'>('LOYALTY');
+  const [accRole, setAccRole] = React.useState<'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY'>('LOYALTY');
   const [accLinkedEmployeeId, setAccLinkedEmployeeId] = React.useState('');
   const [revenuePlan, setRevenuePlan] = React.useState('');
   const [clientPlan, setClientPlan] = React.useState('');
@@ -59,7 +59,7 @@ export default function SettingsPage() {
 
   const updateProfile = useMutation({
     mutationFn: () =>
-      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY'; linkedEmployeeId?: string | null }>(
+      apiJson<{ id: string; name: string; email: string; role: 'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY'; linkedEmployeeId?: string | null }>(
         '/users/me',
         {
           method: 'PATCH',
@@ -89,7 +89,7 @@ export default function SettingsPage() {
 
   const createAccount = useMutation({
     mutationFn: () =>
-      apiJson<{ id: string; email: string; name: string; role: 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY' }>(
+      apiJson<{ id: string; email: string; name: string; role: 'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY' }>(
         '/auth/accounts',
         {
           method: 'POST',
@@ -98,7 +98,8 @@ export default function SettingsPage() {
             email: accEmail.trim(),
             password: accPassword,
             role: accRole,
-            linkedEmployeeId: accRole === 'VIEWER' ? (accLinkedEmployeeId.trim() || undefined) : undefined,
+            linkedEmployeeId:
+              accRole === 'VIEWER' || accRole === 'MASTER' ? (accLinkedEmployeeId.trim() || undefined) : undefined,
           }),
         },
       ),
@@ -271,14 +272,15 @@ export default function SettingsPage() {
             <select
               className="h-10 rounded-lg border border-stroke bg-[hsl(var(--panel))] px-3 text-sm outline-none dark:border-white/[0.08]"
               value={accRole}
-              onChange={(e) => setAccRole(e.target.value as 'ADMIN' | 'MANAGER' | 'VIEWER' | 'LOYALTY')}
+              onChange={(e) => setAccRole(e.target.value as 'ADMIN' | 'MANAGER' | 'MASTER' | 'VIEWER' | 'LOYALTY')}
             >
               <option value="LOYALTY">Лояльность</option>
-              <option value="MANAGER">Менеджер</option>
+              <option value="MANAGER">Менеджер салона</option>
+              <option value="MASTER">Мастер (CRM просмотр)</option>
               <option value="VIEWER">Только просмотр</option>
               <option value="ADMIN">Администратор</option>
             </select>
-            {accRole === 'VIEWER' ?
+            {accRole === 'VIEWER' || accRole === 'MASTER' ?
               <Input
                 value={accLinkedEmployeeId}
                 onChange={(e) => setAccLinkedEmployeeId(e.target.value)}

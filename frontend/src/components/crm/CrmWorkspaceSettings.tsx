@@ -119,7 +119,7 @@ export function CrmWorkspaceSettings({ disabled }: { disabled?: boolean }) {
             })}
           </div>
           {masterIds.length === 0 ?
-            <p className="text-xs text-muted">Если не выбрано — используются сотрудники с ролью «Мастер» (MANAGER).</p>
+            <p className="text-xs text-muted">Если не выбрано — используются аккаунты с ролью «Мастер» (MASTER).</p>
           : null}
         </div>
 

@@ -6,7 +6,7 @@ import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { CrmService } from './crm.service';
 
 @Controller('crm')
-@Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.LOYALTY)
+@Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.MASTER, UserRole.LOYALTY)
 export class CrmController {
   constructor(private readonly crm: CrmService) {}
 
@@ -53,7 +53,7 @@ export class CrmController {
   }
 
   @Post('clients')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   createClient(
     @Body() body: { fullName: string; phone?: string; birthDate?: string; note?: string },
   ) {
@@ -61,10 +61,19 @@ export class CrmController {
   }
 
   @Patch('clients/:id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   patchClient(
     @Param('id') id: string,
-    @Body() body: Partial<{ fullName: string; phone: string; birthDate: string | null; note: string; status: CrmClientStatus; warned: boolean }>,
+    @Body()
+    body: Partial<{
+      fullName: string;
+      phone: string;
+      birthDate: string | null;
+      note: string;
+      status: CrmClientStatus;
+      warned: boolean;
+      discountPercent: number;
+    }>,
   ) {
     return this.crm.updateClient(id, body);
   }
@@ -84,7 +93,7 @@ export class CrmController {
   }
 
   @Post('clients/:id/procedures')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   addProcedure(
     @CurrentUser() user: JwtUserPayload,
     @Param('id') id: string,
@@ -94,6 +103,10 @@ export class CrmController {
       procedureDate: string;
       service: string;
       cost: number;
+      basePrice?: number;
+      discountPercent?: number;
+      extraService?: string;
+      extraCost?: number;
       intervalDays: number;
       masterComment?: string;
       photosBeforeAfter?: unknown;
@@ -106,7 +119,7 @@ export class CrmController {
   }
 
   @Post('appointments')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   createAppointment(
     @Body()
     body: {
@@ -135,7 +148,7 @@ export class CrmController {
   }
 
   @Patch('appointments/:id/status')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   setAppointmentStatus(
     @Param('id') id: string,
     @Body() body: { visitStatus: CrmVisitStatus },

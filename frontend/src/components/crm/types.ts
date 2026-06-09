@@ -17,6 +17,7 @@ export type CrmClient = {
   note: string;
   status: CrmClientStatus;
   warned: boolean;
+  discountPercent?: number;
   totalSpent: number;
   visitsCount: number;
   lastProcedureAt?: string | null;

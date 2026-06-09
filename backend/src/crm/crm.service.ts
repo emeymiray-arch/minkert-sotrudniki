@@ -2,7 +2,10 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays } from '../common/date/week';
+import { NotificationsService } from '../notifications/notifications.service';
+import { OperationsFinanceService } from '../operations/operations-finance.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { calcProcedurePricing } from './crm-pricing.util';
 import {
   normalizeCrmConfig,
   type CrmSalon,
@@ -52,7 +55,11 @@ function daysBetween(from: Date, to: Date) {
 
 @Injectable()
 export class CrmService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly finance: OperationsFinanceService,
+  ) {}
 
   private async loadCrmConfig(): Promise<CrmWorkspaceConfig> {
     const row = await this.prisma.opsSettings.findUnique({ where: { id: 'default' } });
@@ -90,7 +97,7 @@ export class CrmService {
       });
     }
     const links = await this.prisma.user.findMany({
-      where: { role: UserRole.MANAGER, linkedEmployeeId: { not: null } },
+      where: { role: UserRole.MASTER, linkedEmployeeId: { not: null } },
       select: { linkedEmployeeId: true },
     });
     const ids = [...new Set(links.map((l) => l.linkedEmployeeId!).filter(Boolean))];
@@ -148,7 +155,7 @@ export class CrmService {
   }
 
   private ensureMasterScope(where: Record<string, unknown>, user?: JwtUserPayload) {
-    if (user?.role === UserRole.MANAGER && user.linkedEmployeeId) {
+    if (user?.role === UserRole.MASTER && user.linkedEmployeeId) {
       where.OR = [{ appointments: { some: { masterId: user.linkedEmployeeId } } }, { procedures: { some: { masterId: user.linkedEmployeeId } } }];
     }
   }
@@ -217,9 +224,21 @@ export class CrmService {
     if (!phoneNormalized) return null;
     const row = await this.prisma.loyaltyClient.findFirst({
       where: { phoneNormalized },
-      include: { stamps: true },
+      select: { _count: { select: { stamps: true } } },
     });
-    return row ? row.stamps.length : null;
+    return row ? row._count.stamps : null;
+  }
+
+  private async batchLoyaltyStamps(phones: string[]) {
+    const unique = [...new Set(phones.filter(Boolean))];
+    const map = new Map<string, number>();
+    if (!unique.length) return map;
+    const rows = await this.prisma.loyaltyClient.findMany({
+      where: { phoneNormalized: { in: unique } },
+      select: { phoneNormalized: true, _count: { select: { stamps: true } } },
+    });
+    for (const row of rows) map.set(row.phoneNormalized, row._count.stamps);
+    return map;
   }
 
   /** Первая процедура → карточка в программе лояльности (если есть телефон). */
@@ -286,12 +305,8 @@ export class CrmService {
       take: 200,
     });
 
-    return Promise.all(
-      rows.map(async (c) => {
-        const stamps = await this.loyaltyStampCount(c.phoneNormalized);
-        return this.enrichClientRow(c, stamps ?? undefined);
-      }),
-    );
+    const stampMap = await this.batchLoyaltyStamps(rows.map((c) => c.phoneNormalized));
+    return rows.map((c) => this.enrichClientRow(c, stampMap.get(c.phoneNormalized)));
   }
 
   async getClient(id: string) {
@@ -355,7 +370,18 @@ export class CrmService {
     });
   }
 
-  async updateClient(id: string, body: Partial<{ fullName: string; phone: string; birthDate: string | null; note: string; status: CrmClientStatus; warned: boolean }>) {
+  async updateClient(
+    id: string,
+    body: Partial<{
+      fullName: string;
+      phone: string;
+      birthDate: string | null;
+      note: string;
+      status: CrmClientStatus;
+      warned: boolean;
+      discountPercent: number;
+    }>,
+  ) {
     return this.prisma.crmClient.update({
       where: { id },
       data: {
@@ -366,6 +392,10 @@ export class CrmService {
         note: body.note?.trim(),
         status: body.status,
         warned: body.warned,
+        discountPercent:
+          body.discountPercent !== undefined ?
+            Math.min(100, Math.max(0, Math.round(body.discountPercent)))
+          : undefined,
       },
     });
   }
@@ -378,6 +408,10 @@ export class CrmService {
       procedureDate: string;
       service: string;
       cost: number;
+      basePrice?: number;
+      discountPercent?: number;
+      extraService?: string;
+      extraCost?: number;
       intervalDays: number;
       masterComment?: string;
       photosBeforeAfter?: unknown;
@@ -386,15 +420,26 @@ export class CrmService {
       nextVisitAdvice?: string;
     },
   ) {
-    if (user?.role !== UserRole.ADMIN) {
-      throw new BadRequestException('Интервал назначает только администратор');
+    if (user?.role !== UserRole.ADMIN && user?.role !== UserRole.MANAGER) {
+      throw new BadRequestException('Недостаточно прав');
     }
     const procedureDate = parseDate(body.procedureDate);
     if (!procedureDate) throw new BadRequestException('Дата процедуры обязательна');
     const service = body.service?.trim();
     if (!service) throw new BadRequestException('Услуга обязательна');
-    const cost = Math.max(0, Math.round(body.cost ?? 0));
     const intervalDays = Math.max(0, Math.round(Number(body.intervalDays)));
+
+    const clientRow = await this.prisma.crmClient.findUnique({ where: { id: clientId } });
+    if (!clientRow) throw new NotFoundException('Клиент не найден');
+
+    const basePrice = Math.max(0, Math.round(body.basePrice ?? body.cost ?? 0));
+    const discountPercent =
+      body.discountPercent !== undefined ?
+        Math.min(100, Math.max(0, Math.round(body.discountPercent)))
+      : clientRow.discountPercent;
+    const extraCost = Math.max(0, Math.round(body.extraCost ?? 0));
+    const pricing = calcProcedurePricing(basePrice, discountPercent, extraCost);
+    const cost = pricing.cost;
     if (!intervalDays) throw new BadRequestException('Интервал обязателен');
 
     const total = await this.prisma.crmProcedure.count({ where: { clientId } });
@@ -411,14 +456,21 @@ export class CrmService {
     const recommendedNext = explicitNext ?? computedNext;
     const today = utcToday();
 
-    return this.prisma.$transaction(async (tx) => {
-      const procedure = await tx.crmProcedure.create({
+    const procedure = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.crmProcedure.create({
         data: {
           clientId,
           masterId: body.masterId ?? null,
           procedureDate,
           service,
           cost,
+          basePrice: pricing.basePrice,
+          discountPercent: pricing.discountPercent,
+          discountAmount: pricing.discountAmount,
+          extraService: body.extraService?.trim() ?? '',
+          extraCost: pricing.extraCost,
+          finalPrice: pricing.finalPrice,
+          masterSalary: pricing.masterSalary,
           intervalDays,
           sequenceNumber: nextSeq,
           masterComment: body.masterComment?.trim() ?? '',
@@ -432,7 +484,7 @@ export class CrmService {
       const client = await tx.crmClient.update({
         where: { id: clientId },
         data: {
-          totalSpent: { increment: cost },
+          totalSpent: { increment: pricing.finalPrice },
           visitsCount: { increment: 1 },
           lastProcedureAt: procedureDate,
           recommendedNextAt: recommendedNext,
@@ -444,8 +496,11 @@ export class CrmService {
         await this.ensureLoyaltyForFirstVisit(client);
       }
 
-      return procedure;
+      return row;
     });
+
+    await this.finance.syncFromProcedures(dateOnlyIso(procedureDate) ?? undefined);
+    return procedure;
   }
 
   async createAppointment(body: {
@@ -543,6 +598,14 @@ export class CrmService {
       data: { status: CrmClientStatus.GREEN },
     });
 
+    await this.notifications.appointmentCreated({
+      clientName: client.fullName,
+      masterName: appointment.master?.name,
+      startsAt: appointment.startsAt.toISOString(),
+      service: appointment.service,
+      masterId: appointment.masterId,
+    });
+
     return {
       appointment: {
         ...appointment,
@@ -557,10 +620,17 @@ export class CrmService {
   async listAppointments(from?: string, to?: string, masterId?: string, user?: JwtUserPayload) {
     const where: Record<string, unknown> = {};
     if (masterId?.trim()) where.masterId = masterId.trim();
-    if (user?.role === UserRole.MANAGER && user.linkedEmployeeId) where.masterId = user.linkedEmployeeId;
-    const fromDate = from ? parseDateTime(from) : null;
-    const toDate = to ? parseDateTime(to) : null;
-    if (fromDate || toDate) where.startsAt = { gte: fromDate ?? undefined, lte: toDate ?? undefined };
+    if (user?.role === UserRole.MASTER && user.linkedEmployeeId) where.masterId = user.linkedEmployeeId;
+    let fromDate = from ? parseDateTime(from) : null;
+    let toDate = to ? parseDateTime(to) : null;
+    if (!fromDate && !toDate) {
+      const now = new Date();
+      fromDate = new Date(now);
+      fromDate.setUTCDate(fromDate.getUTCDate() - 14);
+      toDate = new Date(now);
+      toDate.setUTCDate(toDate.getUTCDate() + 90);
+    }
+    where.startsAt = { gte: fromDate ?? undefined, lte: toDate ?? undefined };
 
     const config = await this.loadCrmConfig();
     return this.prisma.crmAppointment.findMany({
@@ -600,6 +670,12 @@ export class CrmService {
   }
 
   async updateAppointmentStatus(id: string, visitStatus: CrmVisitStatus) {
+    const prev = await this.prisma.crmAppointment.findUnique({
+      where: { id },
+      include: { client: { select: { fullName: true } } },
+    });
+    if (!prev) throw new NotFoundException('Запись не найдена');
+
     const appt = await this.prisma.crmAppointment.update({
       where: { id },
       data: { visitStatus },
@@ -612,6 +688,14 @@ export class CrmService {
     if (status) {
       await this.prisma.crmClient.update({ where: { id: appt.clientId }, data: { status } });
     }
+
+    if (visitStatus === CrmVisitStatus.CANCELED && prev.visitStatus !== CrmVisitStatus.CANCELED) {
+      await this.notifications.appointmentCanceled({
+        clientName: prev.client.fullName,
+        startsAt: prev.startsAt.toISOString(),
+      });
+    }
+
     return appt;
   }
 

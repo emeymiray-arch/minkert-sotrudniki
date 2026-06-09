@@ -1,6 +1,8 @@
 import { Trash2 } from 'lucide-react';
+import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { CrmClient, CrmClientStatus } from '@/components/crm/types';
 import { STATUS_CLASS, STATUS_RU, money } from '@/components/crm/types';
@@ -22,18 +24,26 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 export function ClientCard({
   client,
   isAdmin,
+  canEditDiscount,
   onStatus,
   onWarn,
+  onDiscount,
   onDelete,
   deleting,
 }: {
   client: CrmClient;
   isAdmin: boolean;
+  canEditDiscount?: boolean;
   onStatus: (id: string, status: CrmClientStatus) => void;
   onWarn: (id: string, warned: boolean) => void;
+  onDiscount: (id: string, discountPercent: number) => void;
   onDelete: (id: string) => void;
   deleting?: boolean;
 }) {
+  const [discountDraft, setDiscountDraft] = React.useState(String(client.discountPercent ?? 0));
+  React.useEffect(() => {
+    setDiscountDraft(String(client.discountPercent ?? 0));
+  }, [client.discountPercent]);
   const interval = client.interval;
 
   return (
@@ -77,6 +87,27 @@ export function ClientCard({
           : null}
         </div>
       </div>
+
+      {canEditDiscount ?
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase text-muted">Скидка клиента</span>
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            className="h-8 w-20"
+            value={discountDraft}
+            onChange={(e) => setDiscountDraft(e.target.value)}
+            onBlur={() => {
+              const n = Math.min(100, Math.max(0, Math.round(Number(discountDraft || 0))));
+              if (n !== (client.discountPercent ?? 0)) onDiscount(client.id, n);
+            }}
+          />
+          <span className="text-sm text-muted">%</span>
+        </div>
+      : client.discountPercent ?
+        <div className="mt-3 text-sm text-muted">Скидка: {client.discountPercent}%</div>
+      : null}
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Процедур" value={String(client.visitsCount)} />

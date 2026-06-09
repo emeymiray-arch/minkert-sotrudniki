@@ -19,6 +19,8 @@ export function cnRoleRu(role: string): string {
       return 'Администратор';
     case 'MANAGER':
       return 'Менеджер';
+    case 'MASTER':
+      return 'Мастер';
     case 'VIEWER':
       return 'Только просмотр';
     case 'LOYALTY':

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { ExpenseDayModal } from '@/components/finance/ExpenseDayModal';
 import { FinanceMoneyInput } from '@/components/finance/FinanceMoneyInput';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -34,10 +35,9 @@ type FinanceTable = {
   }>;
   grandTotal: {
     revenue: number;
-    revenueNoDiscount: number;
-    expenses: number;
-    discounts: number;
     salary: number;
+    discounts: number;
+    expenses: number;
     net: number;
     clientCount: number;
   };
@@ -50,22 +50,13 @@ const PERIODS: { id: Period; label: string }[] = [
   { id: 'year', label: 'Год' },
 ];
 
-const EDITABLE_METRICS = new Set([
-  'revenue',
-  'revenueNoDiscount',
-  'expenses',
-  'discounts',
-  'salary',
-  'net',
-  'clients',
-]);
+const AUTO_METRICS = new Set(['revenue', 'salary', 'discounts', 'net']);
 
 const METRIC_TO_GRAND: Record<string, keyof FinanceTable['grandTotal']> = {
   revenue: 'revenue',
-  revenueNoDiscount: 'revenueNoDiscount',
-  expenses: 'expenses',
-  discounts: 'discounts',
   salary: 'salary',
+  discounts: 'discounts',
+  expenses: 'expenses',
   net: 'net',
   clients: 'clientCount',
 };
@@ -116,11 +107,13 @@ export default function FinancePage() {
     const t = todayIso();
     return t.slice(0, 8) + '01';
   });
+  const [expenseDate, setExpenseDate] = React.useState<string | null>(null);
   const qc = useQueryClient();
 
   const tableQ = useQuery({
     queryKey: ['finance', period, anchor],
-    queryFn: () => apiJson<FinanceTable>(`/operations/finance/table?period=${period}&anchor=${anchor}`),
+    queryFn: () => apiJson<FinanceTable>(`/finance/table?period=${period}&anchor=${anchor}`),
+    staleTime: 120_000,
     placeholderData: (prev) => prev,
   });
 
@@ -129,7 +122,7 @@ export default function FinancePage() {
       const payload: Record<string, string | number> = { date: body.date };
       if (body.field === 'clients') payload.clientCount = body.value;
       else payload[body.field] = body.value;
-      return apiJson('/operations/finance/day', { method: 'PATCH', body: JSON.stringify(payload) });
+      return apiJson('/finance/day', { method: 'PATCH', body: JSON.stringify(payload) });
     },
     onMutate: async (vars) => {
       const key = ['finance', period, anchor] as const;
@@ -143,16 +136,17 @@ export default function FinancePage() {
       if (ctx?.prev) qc.setQueryData(key, ctx.prev);
       toast.error(err instanceof Error ? err.message : 'Не удалось сохранить');
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['finance', period, anchor] }),
   });
 
   const data = tableQ.data;
-  const canEdit = period === 'month' || period === 'week';
+  const canEditClients = period === 'month' || period === 'week';
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Финансы"
-        description="Все показатели вводятся вручную. Числа форматируются с запятыми (например 223,666)."
+        description="Выручка, ЗП и скидки считаются из CRM-процедур. Расходы — список покупок по дню."
         actions={
           <div className="flex flex-wrap gap-1">
             {PERIODS.map((p) => (
@@ -220,24 +214,30 @@ export default function FinancePage() {
                   </td>
                   {data.rows.map((metric) => {
                     const val = metric.values[rowIdx] ?? 0;
-                    const editable = canEdit && EDITABLE_METRICS.has(metric.key);
-                    const field = metric.key === 'clients' ? 'clients' : metric.key;
+                    const isExpense = metric.key === 'expenses';
+                    const editableClients = canEditClients && metric.key === 'clients';
                     return (
                       <td
                         key={`${col.key}-${metric.key}`}
-                        className="border-l border-stroke/40 px-3 py-1.5 text-right dark:border-white/[0.05]"
+                        className={cn(
+                          'border-l border-stroke/40 px-3 py-1.5 text-right dark:border-white/[0.05]',
+                          isExpense && canEditClients && 'cursor-pointer hover:bg-black/[0.03] dark:hover:bg-white/[0.04]',
+                        )}
+                        onClick={isExpense && canEditClients ? () => setExpenseDate(col.date) : undefined}
+                        title={isExpense && canEditClients ? 'Нажмите, чтобы открыть список покупок' : undefined}
                       >
-                        {editable ?
+                        {editableClients ?
                           <FinanceMoneyInput
                             value={val}
                             onCommit={(n) => {
-                              if (n !== val) saveMu.mutate({ date: col.date, field, value: n });
+                              if (n !== val) saveMu.mutate({ date: col.date, field: 'clients', value: n });
                             }}
                           />
                         : <span
                           className={cn(
                             'inline-block min-w-[5rem] tabular-nums',
                             metric.key === 'net' && 'font-semibold text-emerald-700 dark:text-emerald-400',
+                            AUTO_METRICS.has(metric.key) && 'text-muted dark:text-white/70',
                           )}
                         >
                           {fmt(val)}
@@ -272,28 +272,33 @@ export default function FinancePage() {
       {data ?
         <div className="flex flex-wrap gap-6 text-sm text-muted dark:text-white/50">
           <span>
-            Выручка: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.revenue)}</strong>
-          </span>
-          <span>
-            Выручка без скидки:{' '}
-            <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.revenueNoDiscount)}</strong>
-          </span>
-          <span>
-            Расходы: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.expenses)}</strong>
-          </span>
-          <span>
-            Скидки: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.discounts)}</strong>
+            Общая выручка: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.revenue)}</strong>
           </span>
           <span>
             ЗП: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.salary)}</strong>
           </span>
           <span>
-            Чистая: <strong className="text-emerald-700 dark:text-emerald-400">{fmt(data.grandTotal.net)}</strong>
+            Скидки: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.discounts)}</strong>
+          </span>
+          <span>
+            Расходы: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.expenses)}</strong>
+          </span>
+          <span>
+            Без расходов: <strong className="text-emerald-700 dark:text-emerald-400">{fmt(data.grandTotal.net)}</strong>
           </span>
           <span>
             Клиентки: <strong className="text-zinc-900 dark:text-white">{fmt(data.grandTotal.clientCount)}</strong>
           </span>
         </div>
+      : null}
+
+      {expenseDate ?
+        <ExpenseDayModal
+          date={expenseDate}
+          open={!!expenseDate}
+          onOpenChange={(v) => !v && setExpenseDate(null)}
+          onUpdated={() => qc.invalidateQueries({ queryKey: ['finance', period, anchor] })}
+        />
       : null}
     </div>
   );

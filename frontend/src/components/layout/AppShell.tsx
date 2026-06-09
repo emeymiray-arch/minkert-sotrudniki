@@ -7,6 +7,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/context/auth';
+import { useNotifications } from '@/hooks/useNotifications';
 import type { UserRole } from '@/lib/types';
 import { useTheme } from '@/context/theme';
 import { cnRoleRu } from '@/lib/format';
@@ -54,9 +55,32 @@ const navGroups: Array<{ label: string; items: NavItem[] }> = [
 
 const navItems = navGroups.flatMap((g) => g.items);
 
+const ROUTE_PREFETCH: Record<string, () => Promise<unknown>> = {
+  '/': () => import('@/pages/DashboardPage'),
+  '/crm': () => import('@/pages/CrmPage'),
+  '/loyalty': () => import('@/pages/LoyaltyPage'),
+  '/finansy': () => import('@/pages/FinancePage'),
+  '/employees': () => import('@/pages/EmployeesPage'),
+  '/analytics': () => import('@/pages/AnalyticsPage'),
+  '/settings': () => import('@/pages/SettingsPage'),
+  '/upravlenie': () => import('@/operations/layout/OpsLayout'),
+  '/problemy': () => import('@/operations/pages/OpsProblemsPage'),
+};
+
+function prefetchRoute(to: string) {
+  const loader = ROUTE_PREFETCH[to];
+  if (loader) void loader();
+}
+
 function navItemsForRole(role?: UserRole) {
   if (role === 'LOYALTY') {
     return navItems.filter((item) => item.to === '/loyalty' || item.to === '/crm');
+  }
+  if (role === 'MASTER') {
+    return navItems.filter((item) => item.to === '/crm');
+  }
+  if (role === 'MANAGER') {
+    return navItems.filter((item) => item.to === '/crm' || item.to === '/loyalty' || item.to === '/finansy');
   }
   return navItems;
 }
@@ -81,6 +105,8 @@ function SidebarNav({ role, onNavigate }: { role?: UserRole; onNavigate?: () => 
                     key={item.to}
                     end={item.end}
                     to={item.to}
+                    onMouseEnter={() => prefetchRoute(item.to)}
+                    onFocus={() => prefetchRoute(item.to)}
                     onClick={() => onNavigate?.()}
                     className={({ isActive }) =>
                       cn(
@@ -119,6 +145,7 @@ const WIDE_ROUTES = new Set(['/finansy']);
 
 export function AppShell({ children }: { children?: React.ReactNode }) {
   const { logout, user } = useAuth();
+  useNotifications();
   const { mode, setMode } = useTheme();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const { pathname } = useLocation();

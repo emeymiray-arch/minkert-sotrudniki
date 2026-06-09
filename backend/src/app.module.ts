@@ -11,6 +11,7 @@ import { LoyaltyModule } from './loyalty/loyalty.module';
 import { CrmModule } from './crm/crm.module';
 import { InsightsModule } from './insights/insights.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { OperationsModule } from './operations/operations.module';
 import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     InsightsModule,
     TasksModule,
     OperationsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

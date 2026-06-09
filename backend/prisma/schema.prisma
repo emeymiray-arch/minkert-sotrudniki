@@ -9,6 +9,7 @@ datasource db {
 enum UserRole {
   ADMIN
   MANAGER
+  MASTER
   VIEWER
   LOYALTY
 }
@@ -372,6 +373,32 @@ model OpsFinanceDay {
   updatedAt   DateTime @updatedAt
 }
 
+model OpsFinanceExpenseItem {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  title     String
+  amount    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model AppNotification {
+  id         String    @id @default(cuid())
+  userId     String?
+  roleTarget UserRole?
+  kind       String
+  title      String
+  body       String    @default("")
+  payload    Json?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([roleTarget, readAt])
+  @@index([createdAt])
+}
+
 model LoyaltyClient {
   id              String         @id @default(cuid())
   name            String
@@ -412,6 +439,7 @@ model CrmClient {
   recommendedNextAt     DateTime?       @db.Date
   requiresRepeatContact Boolean         @default(false)
   warned                Boolean         @default(false)
+  discountPercent       Int             @default(0)
   status                CrmClientStatus @default(RED)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
@@ -434,6 +462,13 @@ model CrmProcedure {
   procedureDate     DateTime  @db.Date
   service           String
   cost              Int       @default(0)
+  basePrice         Int       @default(0)
+  discountPercent   Int       @default(0)
+  discountAmount    Int       @default(0)
+  extraService      String    @default("")
+  extraCost         Int       @default(0)
+  finalPrice        Int       @default(0)
+  masterSalary      Int       @default(0)
   intervalDays      Int
   sequenceNumber    Int       @default(1)
   masterComment     String    @default("")

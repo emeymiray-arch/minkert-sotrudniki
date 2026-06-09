@@ -65,26 +65,23 @@ export class OperationsFinanceService {
     clientCount?: number;
   }) {
     const d = parseDateParam(body.date);
+    const existing = await this.prisma.opsFinanceDay.findUnique({ where: { date: d } });
+    const revenue = body.revenue !== undefined ? Math.round(body.revenue) : (existing?.revenue ?? 0);
+    const revenueNoDiscount =
+      body.revenueNoDiscount !== undefined ?
+        Math.round(body.revenueNoDiscount)
+      : (existing?.revenueNoDiscount ?? revenue);
+    const discounts = body.discounts !== undefined ? Math.round(body.discounts) : (existing?.discounts ?? 0);
+    const salary = body.salary !== undefined ? Math.round(body.salary) : (existing?.salary ?? 0);
+    const expenses = body.expenses !== undefined ? Math.round(body.expenses) : (existing?.expenses ?? 0);
+    const clientCount =
+      body.clientCount !== undefined ? Math.round(body.clientCount) : (existing?.clientCount ?? 0);
+    const net = revenueNoDiscount - salary - discounts - expenses;
+
     const row = await this.prisma.opsFinanceDay.upsert({
       where: { date: d },
-      create: {
-        date: d,
-        revenue: Math.round(body.revenue ?? 0),
-        revenueNoDiscount: Math.round(body.revenueNoDiscount ?? 0),
-        expenses: Math.round(body.expenses ?? 0),
-        discounts: Math.round(body.discounts ?? 0),
-        salary: Math.round(body.salary ?? 0),
-        clientCount: Math.round(body.clientCount ?? 0),
-      },
-      update: {
-        revenue: body.revenue !== undefined ? Math.round(body.revenue) : undefined,
-        revenueNoDiscount:
-          body.revenueNoDiscount !== undefined ? Math.round(body.revenueNoDiscount) : undefined,
-        expenses: body.expenses !== undefined ? Math.round(body.expenses) : undefined,
-        discounts: body.discounts !== undefined ? Math.round(body.discounts) : undefined,
-        salary: body.salary !== undefined ? Math.round(body.salary) : undefined,
-        clientCount: body.clientCount !== undefined ? Math.round(body.clientCount) : undefined,
-      },
+      create: { date: d, revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount },
+      update: { revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount },
     });
     return {
       date: isoDate(row.date),
@@ -136,32 +133,20 @@ export class OperationsFinanceService {
     getEntry: (col: { date: string }) => DayEntry,
   ) {
     const revenueVals = columns.map((c) => getEntry(c).revenue);
-    const revenueNoDiscountVals = columns.map((c) => getEntry(c).revenueNoDiscount);
-    const expenseVals = columns.map((c) => getEntry(c).expenses);
-    const discountVals = columns.map((c) => getEntry(c).discounts);
     const salaryVals = columns.map((c) => getEntry(c).salary);
-    const clientVals = columns.map((c) => getEntry(c).clientCount);
+    const discountVals = columns.map((c) => getEntry(c).discounts);
+    const expenseVals = columns.map((c) => getEntry(c).expenses);
     const netVals = columns.map((c) => getEntry(c).net);
+    const clientVals = columns.map((c) => getEntry(c).clientCount);
 
     const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 
     return [
-      { key: 'revenue', label: 'Выручка', values: revenueVals, total: sum(revenueVals) },
-      {
-        key: 'revenueNoDiscount',
-        label: 'Выручка без скидки',
-        values: revenueNoDiscountVals,
-        total: sum(revenueNoDiscountVals),
-      },
-      { key: 'expenses', label: 'Расходы', values: expenseVals, total: sum(expenseVals) },
-      { key: 'discounts', label: 'Скидки', values: discountVals, total: sum(discountVals) },
+      { key: 'revenue', label: 'Общая выручка', values: revenueVals, total: sum(revenueVals) },
       { key: 'salary', label: 'ЗП', values: salaryVals, total: sum(salaryVals) },
-      {
-        key: 'net',
-        label: 'Выручка без ЗП, расхода и скидок',
-        values: netVals,
-        total: sum(netVals),
-      },
+      { key: 'discounts', label: 'Скидки', values: discountVals, total: sum(discountVals) },
+      { key: 'expenses', label: 'Расходы', values: expenseVals, total: sum(expenseVals) },
+      { key: 'net', label: 'Выручка без всех расходов', values: netVals, total: sum(netVals) },
       { key: 'clients', label: 'Клиентки', values: clientVals, total: sum(clientVals) },
     ];
   }
@@ -212,12 +197,11 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          revenueNoDiscount: rows[1]!.total,
-          expenses: rows[2]!.total,
-          discounts: rows[3]!.total,
-          salary: rows[4]!.total,
-          net: rows[5]!.total,
-          clientCount: rows[6]!.total,
+          salary: rows[1]!.total,
+          discounts: rows[2]!.total,
+          expenses: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -245,12 +229,11 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          revenueNoDiscount: rows[1]!.total,
-          expenses: rows[2]!.total,
-          discounts: rows[3]!.total,
-          salary: rows[4]!.total,
-          net: rows[5]!.total,
-          clientCount: rows[6]!.total,
+          salary: rows[1]!.total,
+          discounts: rows[2]!.total,
+          expenses: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -336,12 +319,11 @@ export class OperationsFinanceService {
         columnFooters: footers,
         grandTotal: {
           revenue: rows[0]!.total,
-          revenueNoDiscount: rows[1]!.total,
-          expenses: rows[2]!.total,
-          discounts: rows[3]!.total,
-          salary: rows[4]!.total,
-          net: rows[5]!.total,
-          clientCount: rows[6]!.total,
+          salary: rows[1]!.total,
+          discounts: rows[2]!.total,
+          expenses: rows[3]!.total,
+          net: rows[4]!.total,
+          clientCount: rows[5]!.total,
         },
       };
     }
@@ -407,13 +389,88 @@ export class OperationsFinanceService {
       columnFooters: footers,
       grandTotal: {
         revenue: rows[0]!.total,
-        revenueNoDiscount: rows[1]!.total,
-        expenses: rows[2]!.total,
-        discounts: rows[3]!.total,
-        salary: rows[4]!.total,
-        net: rows[5]!.total,
-        clientCount: rows[6]!.total,
+        salary: rows[1]!.total,
+        discounts: rows[2]!.total,
+        expenses: rows[3]!.total,
+        net: rows[4]!.total,
+        clientCount: rows[5]!.total,
       },
+    };
+  }
+
+  async listExpenses(dateRaw: string) {
+    const d = parseDateParam(dateRaw);
+    return this.prisma.opsFinanceExpenseItem.findMany({
+      where: { date: d },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async addExpense(body: { date: string; title: string; amount: number }) {
+    const d = parseDateParam(body.date);
+    const title = body.title?.trim();
+    if (!title) throw new BadRequestException('Название расхода обязательно');
+    const row = await this.prisma.opsFinanceExpenseItem.create({
+      data: { date: d, title, amount: Math.max(0, Math.round(body.amount)) },
+    });
+    await this.syncFromProcedures(body.date);
+    return row;
+  }
+
+  async removeExpense(id: string) {
+    const row = await this.prisma.opsFinanceExpenseItem.findUnique({ where: { id } });
+    if (!row) throw new BadRequestException('Расход не найден');
+    await this.prisma.opsFinanceExpenseItem.delete({ where: { id } });
+    await this.syncFromProcedures(isoDate(row.date));
+    return { ok: true };
+  }
+
+  /** Пересчёт дня из CRM-процедур и строк расходов. */
+  async syncFromProcedures(dateRaw?: string) {
+    const d = parseDateParam(dateRaw ?? isoDate(new Date()));
+    const dateIso = isoDate(d);
+
+    const procedures = await this.prisma.crmProcedure.findMany({
+      where: { procedureDate: d },
+    });
+
+    const revenueGross = procedures.reduce(
+      (s, p) => s + ((p.basePrice || 0) + (p.extraCost || 0) || p.cost),
+      0,
+    );
+    const revenue = revenueGross;
+    const discounts = procedures.reduce((s, p) => s + p.discountAmount, 0);
+    const salary = procedures.reduce((s, p) => s + p.masterSalary, 0);
+    const clientCount = procedures.length;
+
+    const expenseItems = await this.prisma.opsFinanceExpenseItem.findMany({ where: { date: d } });
+    const expenses = expenseItems.reduce((s, e) => s + e.amount, 0);
+    const net = revenueGross - salary - discounts - expenses;
+
+    const row = await this.prisma.opsFinanceDay.upsert({
+      where: { date: d },
+      create: {
+        date: d,
+        revenue,
+        revenueNoDiscount: revenueGross,
+        discounts,
+        salary,
+        expenses,
+        net,
+        clientCount,
+      },
+      update: { revenue, revenueNoDiscount: revenueGross, discounts, salary, expenses, net, clientCount },
+    });
+
+    return {
+      date: dateIso,
+      revenue: row.revenue,
+      discounts: row.discounts,
+      salary: row.salary,
+      expenses: row.expenses,
+      net: row.net,
+      clientCount: row.clientCount,
+      expenseItems,
     };
   }
 }
