@@ -838,6 +838,13 @@ export class CrmService {
     return appt;
   }
 
+  async deleteAppointment(id: string) {
+    const prev = await this.prisma.crmAppointment.findUnique({ where: { id } });
+    if (!prev) throw new NotFoundException('Запись не найдена');
+    await this.prisma.crmAppointment.delete({ where: { id } });
+    return { ok: true };
+  }
+
   async dueForRepeat(q?: string, user?: JwtUserPayload) {
     const rows = await this.listIntervals(q, user);
     return rows.filter((r) => r.urgency === 'overdue' || r.urgency === 'due_soon');

@@ -253,6 +253,15 @@ export default function CrmPage() {
     onSuccess: invalidateCrm,
   });
 
+  const deleteAppointmentMu = useMutation({
+    mutationFn: (id: string) => apiJson(`/crm/appointments/${id}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await invalidateCrm();
+      toast.success('Запись удалена');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
+  });
+
   const addProcedureMu = useMutation({
     mutationFn: () =>
       apiJson(`/crm/clients/${procedureClientId}/procedures`, {
@@ -519,6 +528,18 @@ export default function CrmPage() {
                         <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'NO_SHOW' })}>Не пришла</Button>
                         <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'RESCHEDULED' })}>Перенесла</Button>
                         <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'CANCELED' })}>Отменила</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                          disabled={!canWrite || deleteAppointmentMu.isPending}
+                          onClick={() => {
+                            if (!window.confirm(`Удалить запись «${a.client.fullName}» на ${new Date(a.startsAt).toLocaleString('ru-RU')}?`)) return;
+                            deleteAppointmentMu.mutate(a.id);
+                          }}
+                        >
+                          Удалить
+                        </Button>
                       </div>
                     </div>
                   ))}

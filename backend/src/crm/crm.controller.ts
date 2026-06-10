@@ -195,6 +195,12 @@ export class CrmController {
     return this.crm.updateAppointmentStatus(id, body.visitStatus);
   }
 
+  @Delete('appointments/:id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  removeAppointment(@Param('id') id: string) {
+    return this.crm.deleteAppointment(id);
+  }
+
   @Get('intervals')
   intervals(
     @Query('q') q?: string,
