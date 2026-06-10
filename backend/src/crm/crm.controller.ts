@@ -201,6 +201,13 @@ export class CrmController {
     return this.crm.deleteAppointment(id);
   }
 
+  /** POST-алиас: часть прокси/хостингов некорректно проксирует DELETE. */
+  @Post('appointments/:id/delete')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  removeAppointmentPost(@Param('id') id: string) {
+    return this.crm.deleteAppointment(id);
+  }
+
   @Get('intervals')
   intervals(
     @Query('q') q?: string,

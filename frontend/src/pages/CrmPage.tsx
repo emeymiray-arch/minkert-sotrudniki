@@ -254,7 +254,7 @@ export default function CrmPage() {
   });
 
   const deleteAppointmentMu = useMutation({
-    mutationFn: (id: string) => apiJson(`/crm/appointments/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiJson(`/crm/appointments/${id}/delete`, { method: 'POST' }),
     onSuccess: async () => {
       await invalidateCrm();
       toast.success('Запись удалена');
