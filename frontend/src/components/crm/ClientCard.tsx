@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import * as React from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,9 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 export function ClientCard({
   client,
   isAdmin,
+  canEdit,
   canEditDiscount,
+  onEdit,
   onStatus,
   onWarn,
   onDiscount,
@@ -33,7 +35,9 @@ export function ClientCard({
 }: {
   client: CrmClient;
   isAdmin: boolean;
+  canEdit?: boolean;
   canEditDiscount?: boolean;
+  onEdit?: (client: CrmClient) => void;
   onStatus: (id: string, status: CrmClientStatus) => void;
   onWarn: (id: string, warned: boolean) => void;
   onDiscount: (id: string, discountPercent: number) => void;
@@ -58,6 +62,12 @@ export function ClientCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge className={STATUS_CLASS[client.status]}>{STATUS_RU[client.status]}</Badge>
+          {canEdit && onEdit ?
+            <Button size="sm" variant="outline" onClick={() => onEdit(client)}>
+              <Pencil className="size-3.5" />
+              <span className="ml-1.5">Изменить</span>
+            </Button>
+          : null}
           {isAdmin ?
             <>
               <Button size="sm" variant="outline" onClick={() => onStatus(client.id, client.status)}>

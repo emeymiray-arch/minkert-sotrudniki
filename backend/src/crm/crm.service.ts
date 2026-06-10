@@ -517,7 +517,13 @@ export class CrmService {
       discountPercent: number;
     }>,
   ) {
-    return this.prisma.crmClient.update({
+    const prev = await this.prisma.crmClient.findUnique({ where: { id } });
+    if (!prev) throw new NotFoundException('Клиент не найден');
+    if (body.fullName !== undefined && !body.fullName.trim()) {
+      throw new BadRequestException('ФИО не может быть пустым');
+    }
+
+    const updated = await this.prisma.crmClient.update({
       where: { id },
       data: {
         fullName: body.fullName?.trim(),
@@ -533,6 +539,29 @@ export class CrmService {
           : undefined,
       },
     });
+
+    if (body.fullName !== undefined || body.phone !== undefined) {
+      const loyalty = await this.prisma.loyaltyClient.findFirst({
+        where: {
+          OR: [
+            ...(prev.phoneNormalized ? [{ phoneNormalized: prev.phoneNormalized }] : []),
+            ...(updated.phoneNormalized ? [{ phoneNormalized: updated.phoneNormalized }] : []),
+          ],
+        },
+      });
+      if (loyalty) {
+        await this.prisma.loyaltyClient.update({
+          where: { id: loyalty.id },
+          data: {
+            name: updated.fullName,
+            phone: updated.phone,
+            phoneNormalized: updated.phoneNormalized,
+          },
+        });
+      }
+    }
+
+    return updated;
   }
 
   async addProcedure(
@@ -780,6 +809,8 @@ export class CrmService {
             id: true,
             fullName: true,
             phone: true,
+            note: true,
+            birthDate: true,
             status: true,
             visitsCount: true,
             lastProcedureAt: true,

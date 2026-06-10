@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { AppointmentBookingForm } from '@/components/crm/AppointmentBookingForm';
 import { ClientCard } from '@/components/crm/ClientCard';
+import { ClientEditDialog, type ClientEditPayload } from '@/components/crm/ClientEditDialog';
 import { CrmMastersManager } from '@/components/crm/CrmMastersManager';
 import { CrmWorkspaceSettings } from '@/components/crm/CrmWorkspaceSettings';
 import { MasterScheduleBoard } from '@/components/crm/MasterScheduleBoard';
@@ -60,11 +61,21 @@ type CrmAppointment = {
     id: string;
     fullName: string;
     phone: string;
+    note?: string;
+    birthDate?: string | null;
     status: CrmClientStatus;
     visitsCount: number;
     lastProcedureAt?: string | null;
     recommendedNextAt?: string | null;
   };
+};
+
+type ClientEditTarget = {
+  id: string;
+  fullName: string;
+  phone?: string;
+  note?: string;
+  birthDate?: string | null;
 };
 
 type CrmAnalytics = {
@@ -117,6 +128,7 @@ export default function CrmPage() {
   const [intervalDays, setIntervalDays] = React.useState('');
   const [procedureSearch, setProcedureSearch] = React.useState('');
   const dProcedureSearch = useDebouncedValue(procedureSearch, 300);
+  const [editingClient, setEditingClient] = React.useState<ClientEditTarget | null>(null);
 
   const clientsQ = useQuery({
     queryKey: ['crm', 'clients', dq],
@@ -210,12 +222,32 @@ export default function CrmPage() {
       status,
       warned,
       discountPercent,
+      fullName,
+      phone,
+      note,
+      birthDate,
     }: {
       id: string;
       status?: CrmClientStatus;
       warned?: boolean;
       discountPercent?: number;
-    }) => apiJson(`/crm/clients/${id}`, { method: 'PATCH', body: JSON.stringify({ status, warned, discountPercent }) }),
+      fullName?: string;
+      phone?: string;
+      note?: string;
+      birthDate?: string | null;
+    }) =>
+      apiJson(`/crm/clients/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status,
+          warned,
+          discountPercent,
+          fullName,
+          phone,
+          note,
+          birthDate: birthDate === '' ? null : birthDate,
+        }),
+      }),
     onSuccess: invalidateCrm,
   });
 
@@ -295,6 +327,25 @@ export default function CrmPage() {
 
   const selectedProcedureClient = (procedureClientsQ.data ?? []).find((c) => c.id === procedureClientId);
 
+  const saveClientProfile = (payload: ClientEditPayload) => {
+    patchClientMu.mutate(
+      {
+        id: payload.id,
+        fullName: payload.fullName,
+        phone: payload.phone,
+        note: payload.note,
+        birthDate: payload.birthDate || null,
+      },
+      {
+        onSuccess: () => {
+          setEditingClient(null);
+          toast.success('Данные клиента сохранены');
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
+      },
+    );
+  };
+
   const procedurePreview = React.useMemo(() => {
     const base = Number(procedureCost || 0);
     const pct = Math.min(100, Math.max(0, Number(procedureDiscount || selectedProcedureClient?.discountPercent || 0)));
@@ -317,6 +368,15 @@ export default function CrmPage() {
 
   return (
     <div className="space-y-6">
+      <ClientEditDialog
+        client={editingClient}
+        open={Boolean(editingClient)}
+        pending={patchClientMu.isPending}
+        onOpenChange={(open) => {
+          if (!open) setEditingClient(null);
+        }}
+        onSave={saveClientProfile}
+      />
       <PageHeader
         title="CRM"
         description={
@@ -390,7 +450,9 @@ export default function CrmPage() {
                       key={c.id}
                       client={c}
                       isAdmin={isAdmin}
+                      canEdit={canWrite}
                       canEditDiscount={canWrite}
+                      onEdit={setEditingClient}
                       deleting={deleteClientMu.isPending}
                       onStatus={(id, status) => patchClientMu.mutate({ id, status: nextStatus(status) })}
                       onWarn={(id, warned) => patchClientMu.mutate({ id, warned })}
@@ -524,6 +586,22 @@ export default function CrmPage() {
                         <div className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">{a.interval.message}</div>
                       : null}
                       <div className="mt-3 flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canWrite}
+                          onClick={() =>
+                            setEditingClient({
+                              id: a.client.id,
+                              fullName: a.client.fullName,
+                              phone: a.client.phone,
+                              note: a.client.note,
+                              birthDate: a.client.birthDate,
+                            })
+                          }
+                        >
+                          Изменить клиента
+                        </Button>
                         <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'ARRIVED' })}>Пришла</Button>
                         <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'NO_SHOW' })}>Не пришла</Button>
                         <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'RESCHEDULED' })}>Перенесла</Button>

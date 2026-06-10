@@ -22,7 +22,8 @@ export type CrmClient = {
   id: string;
   fullName: string;
   phone: string;
-  note: string;
+  note?: string;
+  birthDate?: string | null;
   status: CrmClientStatus;
   warned: boolean;
   discountPercent?: number;
