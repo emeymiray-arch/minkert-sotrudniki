@@ -236,6 +236,7 @@ export default function CrmPage() {
       salonId: string;
       service: string;
       startsAt: string;
+      durationMinutes: number;
       sequenceNumber: number;
       forceInterval?: boolean;
     }) => apiJson<{ loyaltyCreated?: boolean }>('/crm/appointments', { method: 'POST', body: JSON.stringify(payload) }),

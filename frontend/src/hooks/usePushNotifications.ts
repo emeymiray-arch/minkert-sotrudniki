@@ -25,7 +25,6 @@ function pushSupported() {
 
 export function usePushNotifications() {
   const { user, isAuthenticated } = useAuth();
-  const triedRef = React.useRef(false);
 
   const subscribe = React.useCallback(async () => {
     if (!isAuthenticated || !user) return false;
@@ -44,7 +43,7 @@ export function usePushNotifications() {
         toast.message('Разрешите уведомления в настройках браузера');
         return false;
       }
-      const reg = await navigator.serviceWorker.register('/sw.js');
+      const reg = (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register('/sw.js'));
       await navigator.serviceWorker.ready;
       const { publicKey } = await apiJson<{ publicKey: string | null }>('/notifications/vapid-key');
       if (!publicKey) {
@@ -75,14 +74,13 @@ export function usePushNotifications() {
   }, [isAuthenticated, user]);
 
   React.useEffect(() => {
-    if (!isAuthenticated || !user || triedRef.current) return;
-    if (!['ADMIN', 'MANAGER', 'MASTER'].includes(user.role)) return;
+    if (!isAuthenticated || !user) return;
+    if (!['ADMIN', 'MANAGER', 'MASTER', 'VIEWER'].includes(user.role)) return;
     if (!pushSupported()) return;
-    triedRef.current = true;
     if (Notification.permission === 'granted') {
       void subscribe().catch(() => undefined);
     }
-  }, [isAuthenticated, user, subscribe]);
+  }, [isAuthenticated, user?.id, subscribe]);
 
   return { subscribe };
 }

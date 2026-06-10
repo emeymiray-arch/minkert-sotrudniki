@@ -1,3 +1,21 @@
+/* eslint-disable no-restricted-globals */
+/** Версия SW — при деплое браузер подхватывает обновление без переустановки на экран. */
+const SW_VERSION = 'minkert-20260612';
+
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('push', (event) => {
   let data = { title: 'Minkert', body: '' };
   try {
@@ -21,11 +39,13 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      if (list.length) {
-        list[0].focus();
+      const url = new URL('/', self.location.origin).href;
+      const open = list.find((c) => c.url.startsWith(self.location.origin));
+      if (open) {
+        open.focus();
         return;
       }
-      return clients.openWindow('/');
+      return clients.openWindow(url);
     }),
   );
 });

@@ -64,11 +64,13 @@ export class CrmController {
   checkSlot(
     @Query('masterId') masterId: string,
     @Query('startsAt') startsAt: string,
+    @Query('durationMinutes') durationMinutes?: string,
   ) {
     if (!masterId?.trim() || !startsAt?.trim()) {
       throw new BadRequestException('masterId и startsAt обязательны');
     }
-    return this.crm.checkMasterSlot(masterId.trim(), startsAt);
+    const dur = durationMinutes ? Number(durationMinutes) : undefined;
+    return this.crm.checkMasterSlot(masterId.trim(), startsAt, dur);
   }
 
   @Get('clients')
@@ -162,6 +164,7 @@ export class CrmController {
       salonId?: string;
       service: string;
       startsAt: string;
+      durationMinutes?: number;
       sequenceNumber?: number;
       comment?: string;
       forceInterval?: boolean;

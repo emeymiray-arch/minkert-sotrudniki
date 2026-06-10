@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "Minkert",
   "short_name": "Minkert",
   "description": "CRM, финансы и команда салона",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f0f12",
   "theme_color": "#7c3aed",

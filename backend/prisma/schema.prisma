@@ -526,6 +526,7 @@ model CrmAppointment {
   sequenceNumber Int            @default(1)
   salonId        String         @default("")
   startsAt       DateTime
+  durationMinutes Int           @default(60)
   comment        String         @default("")
   visitStatus    CrmVisitStatus @default(SCHEDULED)
   createdAt   DateTime       @default(now())

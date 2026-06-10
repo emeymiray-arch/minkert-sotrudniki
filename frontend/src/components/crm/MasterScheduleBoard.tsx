@@ -8,26 +8,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
 import { cn } from '@/lib/utils';
 
-type ScheduleAppointment = {
+type ScheduleItem = {
   id: string;
   startsAt: string;
+  endsAt: string;
+  timeLabel: string;
+  durationMinutes: number;
   service: string;
   clientName: string;
   visitStatus: CrmVisitStatus;
-};
-
-type ScheduleSlot = {
-  time: string;
-  label: string;
-  status: 'free' | 'busy' | 'canceled' | 'occupied';
-  appointment?: ScheduleAppointment;
+  canceled: boolean;
 };
 
 type ScheduleMaster = {
   id: string;
   name: string;
   specialty: string;
-  slots: ScheduleSlot[];
+  items: ScheduleItem[];
 };
 
 type ScheduleResponse = {
@@ -35,21 +32,10 @@ type ScheduleResponse = {
   dayStart: string;
   dayEnd: string;
   masters: ScheduleMaster[];
-  appointments: ScheduleAppointment[];
 };
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function formatClock(iso: string) {
-  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-}
-
-function slotCellText(appt: ScheduleAppointment) {
-  const canceled = appt.visitStatus === 'CANCELED';
-  const line = `${formatClock(appt.startsAt)} · ${appt.clientName} · ${appt.service}`;
-  return canceled ? `Отмена · ${line}` : line;
 }
 
 export function MasterScheduleBoard() {
@@ -68,7 +54,7 @@ export function MasterScheduleBoard() {
       <Card>
         <CardHeader
           title="Расписание мастеров"
-          description="Одна строка на запись: время · клиент · услуга. Зелёное — свободно, красное — занято, серое — отмена."
+          description="Гибкие окна с 9:00: каждая процедура — своё время начала и длительность (например 09:00–09:40 или 09:45–11:00)."
         />
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-muted">
@@ -77,63 +63,51 @@ export function MasterScheduleBoard() {
           </label>
           {data ?
             <span className="text-sm text-muted">
-              Окна: {data.dayStart}–{data.dayEnd}
+              Рабочий день: {data.dayStart}–{data.dayEnd}
             </span>
           : null}
         </div>
       </Card>
 
       {scheduleQ.isLoading && !data ?
-        <Skeleton className="h-64" />
+        <Skeleton className="h-48" />
       : !data?.masters.length ?
         <Card>
-          <p className="p-4 text-sm text-muted">Мастера не добавлены — расписание появится после настройки мастеров.</p>
+          <p className="p-4 text-sm text-muted">Мастера не добавлены.</p>
         </Card>
-      : <div className="overflow-x-auto rounded-xl border border-stroke dark:border-white/[0.08]">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-stroke bg-black/[0.02] dark:border-white/[0.08]">
-                <th className="w-16 px-2 py-2 text-left font-semibold">Час</th>
-                {data.masters.map((m) => (
-                  <th key={m.id} className="border-l border-stroke px-2 py-2 text-left font-semibold dark:border-white/[0.08]">
-                    {m.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(data.masters[0]?.slots ?? []).map((_, rowIdx) => (
-                <tr key={rowIdx} className="border-b border-stroke/50 dark:border-white/[0.05]">
-                  <td className="px-2 py-1.5 font-medium tabular-nums text-muted">{data.masters[0]!.slots[rowIdx]!.label}</td>
-                  {data.masters.map((m) => {
-                    const slot = m.slots[rowIdx]!;
-                    const appt = slot.appointment;
-                    return (
-                      <td
-                        key={`${m.id}-${rowIdx}`}
-                        className={cn(
-                          'border-l border-stroke/40 px-2 py-1.5 text-xs leading-snug dark:border-white/[0.05]',
-                          slot.status === 'busy' ?
-                            'bg-rose-500/15 text-rose-950 dark:text-rose-100'
-                          : slot.status === 'canceled' ?
-                            'bg-zinc-400/15 text-zinc-700 line-through dark:text-zinc-300'
-                          : slot.status === 'occupied' ?
-                            'bg-rose-500/8'
-                          : 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200',
-                        )}
-                      >
-                        {appt ?
-                          <span className="font-medium">{slotCellText(appt)}</span>
-                        : slot.status === 'occupied' ?
-                          null
-                        : 'Свободно'}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {data.masters.map((m) => (
+            <Card key={m.id} className="overflow-hidden">
+              <div className="border-b border-stroke bg-black/[0.02] px-3 py-2 dark:border-white/[0.08]">
+                <div className="font-semibold">{m.name}</div>
+                {m.specialty ?
+                  <div className="text-xs text-muted">{m.specialty}</div>
+                : null}
+              </div>
+              <div className="space-y-1.5 p-2">
+                {!m.items.length ?
+                  <p className="px-1 py-4 text-center text-sm text-emerald-700 dark:text-emerald-300">Свободен</p>
+                : m.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        'rounded-lg px-2.5 py-2 text-sm leading-snug',
+                        item.canceled ?
+                          'bg-zinc-400/15 text-zinc-700 line-through dark:text-zinc-300'
+                        : 'bg-rose-500/12 text-rose-950 dark:text-rose-100',
+                      )}
+                    >
+                      <div className="font-semibold tabular-nums">
+                        {item.canceled ? 'Отмена · ' : ''}
+                        {item.timeLabel}
+                      </div>
+                      <div className={cn('font-medium', item.canceled && 'no-underline')}>{item.clientName}</div>
+                      <div className="text-xs opacity-90">{item.service}</div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          ))}
         </div>
       }
     </div>

@@ -12,15 +12,13 @@ import {
   type CrmWorkspaceConfig,
 } from './crm-config.util';
 import {
-  APPOINTMENT_DURATION_MINUTES,
-  appointmentOverlapsSlot,
-  appointmentStartsInSlot,
-  buildDaySlotStarts,
-  formatSlotLabel,
+  appointmentEndsAt,
+  appointmentsOverlap,
+  formatTimeRange,
+  normalizeDurationMinutes,
   parseScheduleDate,
   SCHEDULE_DAY_END_HOUR,
   SCHEDULE_DAY_START_HOUR,
-  SCHEDULE_SLOT_MINUTES,
 } from './crm-schedule.util';
 import {
   computeIntervalCompliance,
@@ -173,107 +171,56 @@ export class CrmService {
     } catch {
       throw new BadRequestException('Дата: YYYY-MM-DD');
     }
-    const dayEnd = new Date(
-      Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), SCHEDULE_DAY_END_HOUR, 0, 0),
-    );
+    const dayFinish = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1));
     const masters = await this.listMasters(false);
     const filteredMasters =
       salonId?.trim() ? masters.filter((m) => !m.salonId || m.salonId === salonId.trim()) : masters;
 
     const appointments = await this.prisma.crmAppointment.findMany({
       where: {
-        startsAt: { gte: day, lt: dayEnd },
+        startsAt: { gte: day, lt: dayFinish },
         visitStatus: { in: SCHEDULE_DISPLAY_STATUSES },
         ...(salonId?.trim() ? { salonId: salonId.trim() } : {}),
       },
       include: {
-        client: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            status: true,
-            visitsCount: true,
-            discountPercent: true,
-          },
-        },
+        client: { select: { id: true, fullName: true, phone: true, status: true, visitsCount: true } },
         master: { select: { id: true, name: true, specialty: true } },
       },
       orderBy: { startsAt: 'asc' },
     });
 
-    const slotStarts = buildDaySlotStarts(day);
-    const board = filteredMasters.map((master) => {
-      const masterAppts = appointments.filter((a) => a.masterId === master.id);
-      const slots = slotStarts.map((slotStart) => {
-        const overlaps = (a: (typeof masterAppts)[number]) => appointmentOverlapsSlot(slotStart, a.startsAt);
-        const startsHere = (a: (typeof masterAppts)[number]) => appointmentStartsInSlot(slotStart, a.startsAt);
-        const hit =
-          masterAppts.find((a) => BLOCKING_VISIT_STATUSES.includes(a.visitStatus) && startsHere(a)) ??
-          masterAppts.find((a) => a.visitStatus === CrmVisitStatus.CANCELED && startsHere(a));
-        if (hit) {
-          const canceled = hit.visitStatus === CrmVisitStatus.CANCELED;
-          return {
-            time: slotStart.toISOString(),
-            label: formatSlotLabel(slotStart),
-            status: canceled ? ('canceled' as const) : ('busy' as const),
-            appointment: {
-              id: hit.id,
-              clientId: hit.client.id,
-              startsAt: hit.startsAt.toISOString(),
-              service: hit.service,
-              clientName: hit.client.fullName,
-              clientPhone: hit.client.phone,
-              clientStatus: hit.client.status,
-              clientVisitsCount: hit.client.visitsCount,
-              masterName: hit.master?.name ?? '—',
-              visitStatus: hit.visitStatus,
-            },
-          };
-        }
-        const occupied = masterAppts.some(
-          (a) => BLOCKING_VISIT_STATUSES.includes(a.visitStatus) && overlaps(a) && !startsHere(a),
-        );
-        if (occupied) {
-          return {
-            time: slotStart.toISOString(),
-            label: formatSlotLabel(slotStart),
-            status: 'occupied' as const,
-          };
-        }
-        return {
-          time: slotStart.toISOString(),
-          label: formatSlotLabel(slotStart),
-          status: 'free' as const,
-        };
-      });
-      return { ...master, slots };
-    });
+    const mapRow = (a: (typeof appointments)[number]) => {
+      const dur = normalizeDurationMinutes(a.durationMinutes);
+      const end = appointmentEndsAt(a.startsAt, dur);
+      return {
+        id: a.id,
+        clientId: a.client.id,
+        masterId: a.masterId,
+        masterName: a.master?.name ?? '—',
+        startsAt: a.startsAt.toISOString(),
+        endsAt: end.toISOString(),
+        durationMinutes: dur,
+        timeLabel: formatTimeRange(a.startsAt, end),
+        service: a.service,
+        clientName: a.client.fullName,
+        clientPhone: a.client.phone,
+        clientStatus: a.client.status,
+        visitStatus: a.visitStatus,
+        canceled: a.visitStatus === CrmVisitStatus.CANCELED,
+      };
+    };
+
+    const board = filteredMasters.map((master) => ({
+      ...master,
+      items: appointments.filter((a) => a.masterId === master.id).map(mapRow),
+    }));
 
     return {
       date: dateOnlyIso(day),
       dayStart: `${String(SCHEDULE_DAY_START_HOUR).padStart(2, '0')}:00`,
       dayEnd: `${String(SCHEDULE_DAY_END_HOUR).padStart(2, '0')}:00`,
-      slotMinutes: SCHEDULE_SLOT_MINUTES,
-      appointmentDurationMinutes: APPOINTMENT_DURATION_MINUTES,
       masters: board,
-      appointments: appointments.map((a) => ({
-        id: a.id,
-        clientId: a.client.id,
-        masterId: a.masterId,
-        masterName: a.master?.name ?? '—',
-        masterSpecialty: a.master?.specialty ?? '',
-        salonId: a.salonId,
-        startsAt: a.startsAt.toISOString(),
-        service: a.service,
-        clientName: a.client.fullName,
-        clientPhone: a.client.phone,
-        clientStatus: a.client.status,
-        clientVisitsCount: a.client.visitsCount,
-        clientDiscountPercent: a.client.discountPercent,
-        visitStatus: a.visitStatus,
-        sequenceNumber: a.sequenceNumber,
-      })),
+      appointments: appointments.map(mapRow),
     };
   }
 
@@ -282,16 +229,30 @@ export class CrmService {
     return salon ?? { id: salonId, name: '—', address: '' };
   }
 
-  private async assertMasterSlotFree(masterId: string, startsAt: Date, excludeId?: string) {
-    const conflict = await this.prisma.crmAppointment.findFirst({
+  private async assertMasterSlotFree(
+    masterId: string,
+    startsAt: Date,
+    durationMinutes: number,
+    excludeId?: string,
+  ) {
+    const dur = normalizeDurationMinutes(durationMinutes);
+    const dayStart = new Date(startsAt);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+    const existing = await this.prisma.crmAppointment.findMany({
       where: {
         masterId,
-        startsAt,
         visitStatus: { in: BLOCKING_VISIT_STATUSES },
+        startsAt: { gte: dayStart, lt: dayEnd },
         ...(excludeId ? { NOT: { id: excludeId } } : {}),
       },
       include: { client: { select: { fullName: true } } },
     });
+    const conflict = existing.find((a) =>
+      appointmentsOverlap(startsAt, dur, a.startsAt, normalizeDurationMinutes(a.durationMinutes)),
+    );
     if (conflict) {
       throw new BadRequestException(
         `Мастер уже занят в это время (клиент: ${conflict.client.fullName}). Выберите другое время.`,
@@ -299,16 +260,25 @@ export class CrmService {
     }
   }
 
-  async checkMasterSlot(masterId: string, startsAt: string) {
+  async checkMasterSlot(masterId: string, startsAt: string, durationMinutes?: number) {
     const at = parseDateTime(startsAt);
-    const conflict = await this.prisma.crmAppointment.findFirst({
+    const dur = normalizeDurationMinutes(durationMinutes);
+    const dayStart = new Date(at);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+    const existing = await this.prisma.crmAppointment.findMany({
       where: {
         masterId,
-        startsAt: at,
         visitStatus: { in: BLOCKING_VISIT_STATUSES },
+        startsAt: { gte: dayStart, lt: dayEnd },
       },
       include: { client: { select: { fullName: true } } },
     });
+    const conflict = existing.find((a) =>
+      appointmentsOverlap(at, dur, a.startsAt, normalizeDurationMinutes(a.durationMinutes)),
+    );
     return {
       available: !conflict,
       conflictClient: conflict?.client.fullName ?? null,
@@ -675,11 +645,13 @@ export class CrmService {
     salonId?: string;
     service: string;
     startsAt: string;
+    durationMinutes?: number;
     sequenceNumber?: number;
     comment?: string;
     forceInterval?: boolean;
   }) {
     const startsAt = parseDateTime(body.startsAt);
+    const durationMinutes = normalizeDurationMinutes(body.durationMinutes);
     const service = body.service?.trim();
     if (!service) throw new BadRequestException('Услуга обязательна');
 
@@ -697,7 +669,7 @@ export class CrmService {
       throw new BadRequestException('Выберите салон');
     }
 
-    await this.assertMasterSlotFree(masterId, startsAt);
+    await this.assertMasterSlotFree(masterId, startsAt, durationMinutes);
 
     let clientId = body.clientId?.trim();
     let client =
@@ -734,6 +706,7 @@ export class CrmService {
         service,
         sequenceNumber,
         startsAt,
+        durationMinutes,
         comment: body.comment?.trim() ?? '',
       },
       include: {

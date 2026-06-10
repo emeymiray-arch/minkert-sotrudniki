@@ -5,8 +5,11 @@ import { TooltipProvider } from '@radix-ui/react-tooltip';
 import { Toaster } from 'sonner';
 
 import App from './App.tsx';
+import { registerAppServiceWorker } from '@/lib/register-sw';
 
 import '@/index.css';
+
+registerAppServiceWorker();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

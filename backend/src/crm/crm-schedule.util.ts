@@ -1,7 +1,8 @@
-export const SCHEDULE_DAY_START_HOUR = 10;
+export const SCHEDULE_DAY_START_HOUR = 9;
 export const SCHEDULE_DAY_END_HOUR = 20;
-export const SCHEDULE_SLOT_MINUTES = 60;
-export const APPOINTMENT_DURATION_MINUTES = 60;
+export const MIN_APPOINTMENT_DURATION_MINUTES = 5;
+export const MAX_APPOINTMENT_DURATION_MINUTES = 8 * 60;
+export const DEFAULT_APPOINTMENT_DURATION_MINUTES = 60;
 
 export function parseScheduleDate(dateRaw: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateRaw.trim());
@@ -9,34 +10,31 @@ export function parseScheduleDate(dateRaw: string): Date {
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
 }
 
-export function buildDaySlotStarts(date: Date): Date[] {
-  const slots: Date[] = [];
-  for (let h = SCHEDULE_DAY_START_HOUR; h < SCHEDULE_DAY_END_HOUR; h++) {
-    slots.push(new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), h, 0, 0)));
-  }
-  return slots;
-}
-
 export function formatSlotLabel(d: Date): string {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
-export function slotEnd(start: Date): Date {
-  return new Date(start.getTime() + SCHEDULE_SLOT_MINUTES * 60_000);
+export function appointmentEndsAt(startsAt: Date, durationMinutes: number): Date {
+  return new Date(startsAt.getTime() + durationMinutes * 60_000);
 }
 
-export function appointmentOverlapsSlot(
-  slotStart: Date,
-  apptStart: Date,
-  durationMin = APPOINTMENT_DURATION_MINUTES,
+export function formatTimeRange(start: Date, end: Date): string {
+  return `${formatSlotLabel(start)}–${formatSlotLabel(end)}`;
+}
+
+export function appointmentsOverlap(
+  aStart: Date,
+  aDurationMin: number,
+  bStart: Date,
+  bDurationMin: number,
 ): boolean {
-  const slotFinish = slotEnd(slotStart);
-  const apptEnd = new Date(apptStart.getTime() + durationMin * 60_000);
-  return apptStart < slotFinish && apptEnd > slotStart;
+  const aEnd = appointmentEndsAt(aStart, aDurationMin);
+  const bEnd = appointmentEndsAt(bStart, bDurationMin);
+  return aStart < bEnd && aEnd > bStart;
 }
 
-/** Запись показываем только в слоте, где она начинается (без дубля в следующем часе). */
-export function appointmentStartsInSlot(slotStart: Date, apptStart: Date): boolean {
-  const slotFinish = slotEnd(slotStart);
-  return apptStart >= slotStart && apptStart < slotFinish;
+export function normalizeDurationMinutes(raw?: number | null): number {
+  const n = Math.round(Number(raw ?? DEFAULT_APPOINTMENT_DURATION_MINUTES));
+  if (!Number.isFinite(n)) return DEFAULT_APPOINTMENT_DURATION_MINUTES;
+  return Math.min(MAX_APPOINTMENT_DURATION_MINUTES, Math.max(MIN_APPOINTMENT_DURATION_MINUTES, n));
 }
