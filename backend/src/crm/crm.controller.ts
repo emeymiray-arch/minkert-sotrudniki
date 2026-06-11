@@ -65,12 +65,13 @@ export class CrmController {
     @Query('masterId') masterId: string,
     @Query('startsAt') startsAt: string,
     @Query('durationMinutes') durationMinutes?: string,
+    @Query('excludeAppointmentId') excludeAppointmentId?: string,
   ) {
     if (!masterId?.trim() || !startsAt?.trim()) {
       throw new BadRequestException('masterId и startsAt обязательны');
     }
     const dur = durationMinutes ? Number(durationMinutes) : undefined;
-    return this.crm.checkMasterSlot(masterId.trim(), startsAt, dur);
+    return this.crm.checkMasterSlot(masterId.trim(), startsAt, dur, excludeAppointmentId?.trim());
   }
 
   @Get('clients')
@@ -181,6 +182,23 @@ export class CrmController {
     @CurrentUser() user?: JwtUserPayload,
   ) {
     return this.crm.listAppointments(from, to, masterId, user);
+  }
+
+  @Patch('appointments/:id')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  patchAppointment(
+    @Param('id') id: string,
+    @Body()
+    body: Partial<{
+      service: string;
+      startsAt: string;
+      durationMinutes: number;
+      masterId: string;
+      salonId: string;
+      sequenceNumber: number;
+    }>,
+  ) {
+    return this.crm.updateAppointment(id, body);
   }
 
   @Patch('appointments/:id/status')

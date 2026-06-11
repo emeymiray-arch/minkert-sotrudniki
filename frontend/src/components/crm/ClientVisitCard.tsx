@@ -10,18 +10,22 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { calcProcedurePricing, type ProcedureDiscountInput } from '@/lib/crm-pricing';
 import { cn } from '@/lib/utils';
 
 export type VisitAppointment = {
   id: string;
   service: string;
   sequenceNumber: number;
+  salonId?: string;
   salonName?: string;
   salonAddress?: string;
   startsAt: string;
+  durationMinutes: number;
   visitStatus: CrmVisitStatus;
   interval?: { intervalOk: boolean; message: string };
   master?: { id: string; name: string } | null;
+  masterId?: string | null;
 };
 
 export type VisitClient = {
@@ -35,29 +39,20 @@ export type VisitClient = {
   discountPercent?: number;
 };
 
+type DiscountMode = ProcedureDiscountInput['mode'];
+
 type ProcedurePayload = {
   procedureDate: string;
   service: string;
   basePrice: number;
   cost: number;
   discountPercent?: number;
+  discountAmount?: number;
+  finalMainPrice?: number;
   extraService?: string;
   extraCost?: number;
   intervalDays: number;
 };
-
-function procedurePreview(
-  base: number,
-  discountPct: number,
-  extra: number,
-) {
-  const pct = Math.min(100, Math.max(0, discountPct));
-  const discountAmount = Math.round((base * pct) / 100);
-  const finalMain = base - discountAmount;
-  const finalPrice = finalMain + extra;
-  const masterSalary = Math.round(base * 0.18) + extra;
-  return { base, pct, discountAmount, finalPrice, masterSalary };
-}
 
 export function ClientVisitCard({
   client,
@@ -66,6 +61,7 @@ export function ClientVisitCard({
   addProcedurePending,
   createAppointmentPending,
   onEditClient,
+  onEditAppointment,
   onVisitStatus,
   onDeleteAppointment,
   onAddProcedure,
@@ -77,6 +73,7 @@ export function ClientVisitCard({
   addProcedurePending?: boolean;
   createAppointmentPending?: boolean;
   onEditClient: (client: VisitClient) => void;
+  onEditAppointment: (appointment: VisitAppointment) => void;
   onVisitStatus: (appointmentId: string, visitStatus: CrmVisitStatus) => void;
   onDeleteAppointment: (appointmentId: string) => void;
   onAddProcedure: (clientId: string, payload: ProcedurePayload) => Promise<unknown>;
@@ -86,7 +83,8 @@ export function ClientVisitCard({
   const [procedureDate, setProcedureDate] = React.useState('');
   const [procedureService, setProcedureService] = React.useState('');
   const [procedureCost, setProcedureCost] = React.useState('');
-  const [procedureDiscount, setProcedureDiscount] = React.useState(
+  const [discountMode, setDiscountMode] = React.useState<DiscountMode>('percent');
+  const [discountValue, setDiscountValue] = React.useState(
     client.discountPercent ? String(client.discountPercent) : '',
   );
   const [extraService, setExtraService] = React.useState('');
@@ -99,23 +97,27 @@ export function ClientVisitCard({
   React.useEffect(() => {
     const next = client.visitsCount + 1;
     setIntervalDays(String(next <= 3 ? 25 : 35));
-    if (!procedureDiscount && client.discountPercent) {
-      setProcedureDiscount(String(client.discountPercent));
+    if (!discountValue && client.discountPercent) {
+      setDiscountValue(String(client.discountPercent));
+      setDiscountMode('percent');
     }
-  }, [client.visitsCount, client.discountPercent, procedureDiscount]);
+  }, [client.visitsCount, client.discountPercent, discountValue]);
 
   const nextSeq = client.visitsCount + 1;
-  const preview = procedurePreview(
-    Number(procedureCost || 0),
-    Number(procedureDiscount || client.discountPercent || 0),
-    Number(extraCost || 0),
-  );
+  const discountInput: ProcedureDiscountInput = (() => {
+    const raw = Number(discountValue || 0);
+    if (discountMode === 'amount') return { mode: 'amount', discountAmount: raw };
+    if (discountMode === 'final') return { mode: 'final', finalMainPrice: raw };
+    return { mode: 'percent', discountPercent: raw || client.discountPercent || 0 };
+  })();
+  const preview = calcProcedurePricing(Number(procedureCost || 0), discountInput, Number(extraCost || 0));
 
   const resetProcedureForm = () => {
     setProcedureDate('');
     setProcedureService('');
     setProcedureCost('');
-    setProcedureDiscount(client.discountPercent ? String(client.discountPercent) : '');
+    setDiscountMode('percent');
+    setDiscountValue(client.discountPercent ? String(client.discountPercent) : '');
     setExtraService('');
     setExtraCost('');
     const next = client.visitsCount + 1;
@@ -148,7 +150,7 @@ export function ClientVisitCard({
           <Badge className={STATUS_CLASS[client.status]}>{STATUS_RU[client.status]}</Badge>
           {canWrite ?
             <Button size="sm" variant="outline" onClick={() => onEditClient(client)}>
-              Изменить
+              Изменить клиента
             </Button>
           : null}
         </div>
@@ -162,8 +164,9 @@ export function ClientVisitCard({
             <div key={a.id} className="rounded-lg border border-stroke/80 bg-black/[0.02] p-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
-                  <div className="text-[10px] font-semibold uppercase text-muted">Дата</div>
+                  <div className="text-[10px] font-semibold uppercase text-muted">Дата и время</div>
                   <div className="font-medium">{new Date(a.startsAt).toLocaleString('ru-RU')}</div>
+                  <div className="text-xs text-muted">{a.durationMinutes} мин</div>
                 </div>
                 <div>
                   <div className="text-[10px] font-semibold uppercase text-muted">Мастер</div>
@@ -189,6 +192,11 @@ export function ClientVisitCard({
                 <div className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">{a.interval.message}</div>
               : null}
               <div className="mt-3 flex flex-wrap gap-1">
+                {canWrite ?
+                  <Button size="sm" variant="outline" onClick={() => onEditAppointment(a)}>
+                    Изменить запись
+                  </Button>
+                : null}
                 <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => onVisitStatus(a.id, 'ARRIVED')}>Пришла</Button>
                 <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => onVisitStatus(a.id, 'NO_SHOW')}>Не пришла</Button>
                 <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => onVisitStatus(a.id, 'RESCHEDULED')}>Перенесла</Button>
@@ -240,24 +248,53 @@ export function ClientVisitCard({
           <Input type="date" value={procedureDate} disabled={!canWrite} onChange={(e) => setProcedureDate(e.target.value)} />
           <Input placeholder="Услуга" value={procedureService} disabled={!canWrite} onChange={(e) => setProcedureService(e.target.value)} />
           <Input placeholder="Цена основной услуги" type="number" value={procedureCost} disabled={!canWrite} onChange={(e) => setProcedureCost(e.target.value)} />
-          <Input
-            placeholder={`Скидка %${client.discountPercent ? ` (клиент ${client.discountPercent}%)` : ''}`}
-            type="number"
-            value={procedureDiscount}
-            disabled={!canWrite}
-            onChange={(e) => setProcedureDiscount(e.target.value)}
-          />
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">Скидка или итог</label>
+            <div className="flex flex-wrap gap-2">
+              <select
+                className="h-10 rounded-md border border-stroke bg-transparent px-3 text-sm"
+                value={discountMode}
+                disabled={!canWrite}
+                onChange={(e) => {
+                  setDiscountMode(e.target.value as DiscountMode);
+                  setDiscountValue('');
+                }}
+              >
+                <option value="percent">Скидка %</option>
+                <option value="amount">Минус ₽</option>
+                <option value="final">Итоговая цена</option>
+              </select>
+              <Input
+                className="min-w-[8rem] flex-1"
+                type="number"
+                min={0}
+                placeholder={
+                  discountMode === 'percent' ?
+                    client.discountPercent ? `напр. ${client.discountPercent}` : '10'
+                  : discountMode === 'amount' ?
+                    'напр. 500'
+                  : 'цена после скидки'
+                }
+                value={discountValue}
+                disabled={!canWrite}
+                onChange={(e) => setDiscountValue(e.target.value)}
+              />
+            </div>
+          </div>
           <Input placeholder="Доп. услуга" value={extraService} disabled={!canWrite} onChange={(e) => setExtraService(e.target.value)} />
           <Input placeholder="Цена доп. услуги" type="number" value={extraCost} disabled={!canWrite} onChange={(e) => setExtraCost(e.target.value)} />
           <Input placeholder="Интервал (дни) *" type="number" value={intervalDays} disabled={!canWrite} onChange={(e) => setIntervalDays(e.target.value)} />
         </div>
         {procedureCost ?
           <div className="mt-2 rounded-lg border px-3 py-2 text-sm">
-            <span className="text-rose-600 line-through dark:text-rose-400">{preview.base.toLocaleString('ru-RU')} ₽</span>
+            <span className="text-rose-600 line-through dark:text-rose-400">{preview.basePrice.toLocaleString('ru-RU')} ₽</span>
             {' → '}
             <span className="font-semibold text-emerald-700 dark:text-emerald-400">{preview.finalPrice.toLocaleString('ru-RU')} ₽</span>
-            {preview.pct > 0 ?
-              <span className="ml-2 text-muted">(скидка {preview.pct}% = −{preview.discountAmount} ₽)</span>
+            {preview.discountAmount > 0 ?
+              <span className="ml-2 text-muted">
+                (скидка −{preview.discountAmount.toLocaleString('ru-RU')} ₽
+                {preview.discountPercent > 0 ? ` · ${preview.discountPercent}%` : ''})
+              </span>
             : null}
             <span className="ml-2 text-muted">· ЗП мастера: {preview.masterSalary.toLocaleString('ru-RU')} ₽</span>
           </div>
@@ -271,7 +308,13 @@ export function ClientVisitCard({
               service: procedureService.trim(),
               basePrice: Number(procedureCost || 0),
               cost: Number(procedureCost || 0),
-              discountPercent: procedureDiscount ? Number(procedureDiscount) : undefined,
+              ...(discountMode === 'percent' && discountValue ?
+                { discountPercent: Number(discountValue) }
+              : discountMode === 'amount' && discountValue ?
+                { discountAmount: Number(discountValue) }
+              : discountMode === 'final' && discountValue ?
+                { finalMainPrice: Number(discountValue) }
+              : {}),
               extraService: extraService.trim() || undefined,
               extraCost: extraCost ? Number(extraCost) : undefined,
               intervalDays: Number(intervalDays || 0),

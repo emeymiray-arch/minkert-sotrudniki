@@ -3,6 +3,11 @@ import * as React from 'react';
 import { toast } from 'sonner';
 
 import { AppointmentBookingForm } from '@/components/crm/AppointmentBookingForm';
+import {
+  AppointmentEditDialog,
+  type AppointmentEditPayload,
+  type AppointmentEditSource,
+} from '@/components/crm/AppointmentEditDialog';
 import { ClientCard } from '@/components/crm/ClientCard';
 import { ClientVisitCard, type VisitAppointment, type VisitClient } from '@/components/crm/ClientVisitCard';
 import { ClientEditDialog, type ClientEditPayload } from '@/components/crm/ClientEditDialog';
@@ -53,9 +58,11 @@ type CrmAppointment = {
   salonName?: string;
   salonAddress?: string;
   startsAt: string;
+  durationMinutes: number;
   visitStatus: CrmVisitStatus;
   interval?: IntervalCompliance;
   master?: { id: string; name: string } | null;
+  masterId?: string | null;
   client: {
     id: string;
     fullName: string;
@@ -119,6 +126,7 @@ export default function CrmPage() {
   const [fullName, setFullName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [editingClient, setEditingClient] = React.useState<ClientEditTarget | null>(null);
+  const [editingAppointment, setEditingAppointment] = React.useState<AppointmentEditSource | null>(null);
 
   const clientsQ = useQuery({
     queryKey: ['crm', 'clients', dq],
@@ -268,6 +276,27 @@ export default function CrmPage() {
     onSuccess: invalidateCrm,
   });
 
+  const patchAppointmentMu = useMutation({
+    mutationFn: (payload: AppointmentEditPayload) =>
+      apiJson(`/crm/appointments/${payload.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          service: payload.service,
+          startsAt: payload.startsAt,
+          durationMinutes: payload.durationMinutes,
+          masterId: payload.masterId,
+          salonId: payload.salonId,
+          sequenceNumber: payload.sequenceNumber,
+        }),
+      }),
+    onSuccess: async () => {
+      await invalidateCrm();
+      setEditingAppointment(null);
+      toast.success('Запись обновлена');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
+  });
+
   const deleteAppointmentMu = useMutation({
     mutationFn: (id: string) => apiJson(`/crm/appointments/${id}/delete`, { method: 'POST' }),
     onSuccess: async () => {
@@ -285,6 +314,8 @@ export default function CrmPage() {
       basePrice,
       cost,
       discountPercent,
+      discountAmount,
+      finalMainPrice,
       extraService,
       extraCost,
       intervalDays,
@@ -295,6 +326,8 @@ export default function CrmPage() {
       basePrice: number;
       cost: number;
       discountPercent?: number;
+      discountAmount?: number;
+      finalMainPrice?: number;
       extraService?: string;
       extraCost?: number;
       intervalDays: number;
@@ -307,6 +340,8 @@ export default function CrmPage() {
           basePrice,
           cost,
           discountPercent,
+          discountAmount,
+          finalMainPrice,
           extraService,
           extraCost,
           intervalDays,
@@ -336,12 +371,15 @@ export default function CrmPage() {
         id: a.id,
         service: a.service,
         sequenceNumber: a.sequenceNumber,
+        salonId: a.salonId,
         salonName: a.salonName,
         salonAddress: a.salonAddress,
         startsAt: a.startsAt,
+        durationMinutes: a.durationMinutes ?? 60,
         visitStatus: a.visitStatus,
         interval: a.interval,
         master: a.master,
+        masterId: a.masterId,
       };
       const group = map.get(client.id);
       if (group) group.appointments.push(row);
@@ -399,6 +437,15 @@ export default function CrmPage() {
           if (!open) setEditingClient(null);
         }}
         onSave={saveClientProfile}
+      />
+      <AppointmentEditDialog
+        appointment={editingAppointment}
+        open={Boolean(editingAppointment)}
+        pending={patchAppointmentMu.isPending}
+        onOpenChange={(open) => {
+          if (!open) setEditingAppointment(null);
+        }}
+        onSave={(payload) => patchAppointmentMu.mutate(payload)}
       />
       <PageHeader
         title="CRM"
@@ -535,6 +582,17 @@ export default function CrmPage() {
                           phone: c.phone,
                           note: c.note,
                           birthDate: c.birthDate,
+                        })
+                      }
+                      onEditAppointment={(a) =>
+                        setEditingAppointment({
+                          id: a.id,
+                          service: a.service,
+                          sequenceNumber: a.sequenceNumber,
+                          startsAt: a.startsAt,
+                          durationMinutes: a.durationMinutes,
+                          masterId: a.masterId,
+                          salonId: a.salonId,
                         })
                       }
                       onVisitStatus={(id, visitStatus) => setVisitStatusMu.mutate({ id, visitStatus })}

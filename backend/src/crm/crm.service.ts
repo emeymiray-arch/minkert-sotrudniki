@@ -260,7 +260,12 @@ export class CrmService {
     }
   }
 
-  async checkMasterSlot(masterId: string, startsAt: string, durationMinutes?: number) {
+  async checkMasterSlot(
+    masterId: string,
+    startsAt: string,
+    durationMinutes?: number,
+    excludeAppointmentId?: string,
+  ) {
     const at = parseDateTime(startsAt);
     const dur = normalizeDurationMinutes(durationMinutes);
     const dayStart = new Date(at);
@@ -273,6 +278,7 @@ export class CrmService {
         masterId,
         visitStatus: { in: BLOCKING_VISIT_STATUSES },
         startsAt: { gte: dayStart, lt: dayEnd },
+        ...(excludeAppointmentId ? { NOT: { id: excludeAppointmentId } } : {}),
       },
       include: { client: { select: { fullName: true } } },
     });
@@ -574,6 +580,8 @@ export class CrmService {
       cost: number;
       basePrice?: number;
       discountPercent?: number;
+      discountAmount?: number;
+      finalMainPrice?: number;
       extraService?: string;
       extraCost?: number;
       intervalDays: number;
@@ -597,12 +605,19 @@ export class CrmService {
     if (!clientRow) throw new NotFoundException('Клиент не найден');
 
     const basePrice = Math.max(0, Math.round(body.basePrice ?? body.cost ?? 0));
-    const discountPercent =
-      body.discountPercent !== undefined ?
-        Math.min(100, Math.max(0, Math.round(body.discountPercent)))
-      : clientRow.discountPercent;
     const extraCost = Math.max(0, Math.round(body.extraCost ?? 0));
-    const pricing = calcProcedurePricing(basePrice, discountPercent, extraCost);
+    let pricing;
+    if (body.finalMainPrice !== undefined) {
+      pricing = calcProcedurePricing(basePrice, { mode: 'final', finalMainPrice: body.finalMainPrice }, extraCost);
+    } else if (body.discountAmount !== undefined) {
+      pricing = calcProcedurePricing(basePrice, { mode: 'amount', discountAmount: body.discountAmount }, extraCost);
+    } else {
+      const discountPercent =
+        body.discountPercent !== undefined ?
+          Math.min(100, Math.max(0, Math.round(body.discountPercent)))
+        : clientRow.discountPercent;
+      pricing = calcProcedurePricing(basePrice, { mode: 'percent', discountPercent }, extraCost);
+    }
     const cost = pricing.cost;
     if (!intervalDays) throw new BadRequestException('Интервал обязателен');
 
@@ -868,6 +883,49 @@ export class CrmService {
     }
 
     return appt;
+  }
+
+  async updateAppointment(
+    id: string,
+    body: Partial<{
+      service: string;
+      startsAt: string;
+      durationMinutes: number;
+      masterId: string;
+      salonId: string;
+      sequenceNumber: number;
+    }>,
+  ) {
+    const prev = await this.prisma.crmAppointment.findUnique({ where: { id } });
+    if (!prev) throw new NotFoundException('Запись не найдена');
+
+    const service = body.service !== undefined ? body.service.trim() : prev.service;
+    if (!service) throw new BadRequestException('Услуга обязательна');
+
+    const startsAt = body.startsAt ? parseDateTime(body.startsAt) : prev.startsAt;
+    const durationMinutes =
+      body.durationMinutes !== undefined ? normalizeDurationMinutes(body.durationMinutes) : prev.durationMinutes;
+    const masterId = body.masterId?.trim() ?? prev.masterId;
+    if (!masterId) throw new BadRequestException('Выберите мастера');
+
+    const config = await this.loadCrmConfig();
+    const master = await this.prisma.crmMaster.findFirst({ where: { id: masterId, active: true } });
+    if (!master) throw new BadRequestException('Выбранный мастер не найден');
+
+    const salonId = body.salonId?.trim() ?? prev.salonId;
+    if (!config.salons.some((s) => s.id === salonId)) {
+      throw new BadRequestException('Выберите салон');
+    }
+
+    const sequenceNumber =
+      body.sequenceNumber !== undefined ? Math.max(1, Math.round(body.sequenceNumber)) : prev.sequenceNumber;
+
+    await this.assertMasterSlotFree(masterId, startsAt, durationMinutes, id);
+
+    return this.prisma.crmAppointment.update({
+      where: { id },
+      data: { service, startsAt, durationMinutes, masterId, salonId, sequenceNumber },
+    });
   }
 
   async deleteAppointment(id: string) {

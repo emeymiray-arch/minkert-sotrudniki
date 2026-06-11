@@ -3,7 +3,6 @@ export type ProcedureDiscountInput =
   | { mode: 'amount'; discountAmount: number }
   | { mode: 'final'; finalMainPrice: number };
 
-/** Расчёт цены процедуры: скидка %, фикс. сумма или итоговая цена основной услуги. */
 export function calcProcedurePricing(
   basePrice: number,
   discount: ProcedureDiscountInput,
@@ -29,16 +28,6 @@ export function calcProcedurePricing(
   const finalMain = base - discountAmount;
   const finalPrice = finalMain + extra;
   const masterSalary = Math.round(base * 0.18) + extra;
-  const grossRevenue = base + extra;
 
-  return {
-    basePrice: base,
-    discountPercent,
-    discountAmount,
-    extraCost: extra,
-    finalPrice,
-    masterSalary,
-    grossRevenue,
-    cost: finalPrice,
-  };
+  return { basePrice: base, discountPercent, discountAmount, finalPrice, masterSalary, finalMain };
 }
