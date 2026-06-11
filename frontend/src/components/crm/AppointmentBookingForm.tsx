@@ -14,10 +14,13 @@ type Master = { id: string; name: string; specialty?: string; phone?: string };
 export function AppointmentBookingForm({
   disabled,
   pending,
+  lockedClient,
   onSubmit,
 }: {
   disabled?: boolean;
   pending?: boolean;
+  /** Клиент уже выбран — показываем только поля записи */
+  lockedClient?: CrmClient | null;
   onSubmit: (payload: {
     clientId?: string;
     newClient?: { fullName: string; phone?: string };
@@ -28,11 +31,11 @@ export function AppointmentBookingForm({
     durationMinutes: number;
     sequenceNumber: number;
     forceInterval?: boolean;
-  }) => void;
+  }) => void | Promise<unknown>;
 }) {
   const [mode, setMode] = React.useState<'search' | 'new'>('search');
-  const [q, setQ] = React.useState('');
-  const [selected, setSelected] = React.useState<CrmClient | null>(null);
+  const [q, setQ] = React.useState(lockedClient?.fullName ?? '');
+  const [selected, setSelected] = React.useState<CrmClient | null>(lockedClient ?? null);
   const [newName, setNewName] = React.useState('');
   const [newPhone, setNewPhone] = React.useState('');
   const [service, setService] = React.useState('');
@@ -95,6 +98,27 @@ export function AppointmentBookingForm({
 
   const selectedSalon = workspaceQ.data?.salons.find((s) => s.id === salonId);
 
+  const resetForm = React.useCallback(() => {
+    setMode('search');
+    setQ('');
+    setSelected(null);
+    setNewName('');
+    setNewPhone('');
+    setService('');
+    setStartsAt('');
+    setDurationMinutes('60');
+    setSequenceNumber('');
+    setForceInterval(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (lockedClient) {
+      setSelected(lockedClient);
+      setQ(lockedClient.fullName);
+      setMode('search');
+    }
+  }, [lockedClient]);
+
   React.useEffect(() => {
     if (selected && !sequenceNumber) {
       setSequenceNumber(String(selected.visitsCount + 1));
@@ -116,16 +140,18 @@ export function AppointmentBookingForm({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant={mode === 'search' ? 'primary' : 'outline'} onClick={() => setMode('search')}>
-          Найти по ФИО
-        </Button>
-        <Button type="button" size="sm" variant={mode === 'new' ? 'primary' : 'outline'} onClick={() => { setMode('new'); setSelected(null); }}>
-          Новый клиент
-        </Button>
-      </div>
+      {!lockedClient ?
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant={mode === 'search' ? 'primary' : 'outline'} onClick={() => setMode('search')}>
+            Найти по ФИО
+          </Button>
+          <Button type="button" size="sm" variant={mode === 'new' ? 'primary' : 'outline'} onClick={() => { setMode('new'); setSelected(null); }}>
+            Новый клиент
+          </Button>
+        </div>
+      : null}
 
-      {mode === 'search' ?
+      {!lockedClient && mode === 'search' ?
         <div className="space-y-2">
           <Input
             placeholder="ФИО — начните вводить"
@@ -169,10 +195,17 @@ export function AppointmentBookingForm({
             </div>
           : null}
         </div>
-      : <div className="grid gap-2 sm:grid-cols-2">
+      : !lockedClient ?
+        <div className="grid gap-2 sm:grid-cols-2">
           <Input placeholder="ФИО *" value={newName} disabled={disabled} onChange={(e) => setNewName(e.target.value)} />
           <Input placeholder="Телефон (для лояльности)" value={newPhone} disabled={disabled} onChange={(e) => setNewPhone(e.target.value)} />
-        </div>}
+        </div>
+      : lockedClient ?
+        <div className="rounded-lg bg-emerald-500/5 px-3 py-2 text-sm">
+          <span className="font-semibold">{lockedClient.fullName}</span>
+          <span className="text-muted"> · {lockedClient.phone || 'без телефона'}</span>
+        </div>
+      : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -278,19 +311,23 @@ export function AppointmentBookingForm({
           pending ||
           Boolean(clientId && startsAt && intervalQ.data && !intervalQ.data.intervalOk && !forceInterval)
         }
-        onClick={() =>
-          onSubmit({
-            clientId: mode === 'search' ? selected?.id : undefined,
-            newClient: mode === 'new' ? { fullName: newName.trim(), phone: newPhone.trim() || undefined } : undefined,
-            masterId,
-            salonId,
-            service: service.trim(),
-            startsAt,
-            durationMinutes: durationNum,
-            sequenceNumber: effectiveSeq,
-            forceInterval: forceInterval || undefined,
-          })
-        }
+        onClick={() => {
+          void Promise.resolve(
+            onSubmit({
+              clientId: mode === 'search' ? selected?.id : undefined,
+              newClient: mode === 'new' ? { fullName: newName.trim(), phone: newPhone.trim() || undefined } : undefined,
+              masterId,
+              salonId,
+              service: service.trim(),
+              startsAt,
+              durationMinutes: durationNum,
+              sequenceNumber: effectiveSeq,
+              forceInterval: forceInterval || undefined,
+            }),
+          )
+            .then(() => resetForm())
+            .catch(() => undefined);
+        }}
       >
         {pending ? 'Сохранение…' : 'Создать запись'}
       </Button>

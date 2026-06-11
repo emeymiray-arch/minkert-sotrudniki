@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { AppointmentBookingForm } from '@/components/crm/AppointmentBookingForm';
 import { ClientCard } from '@/components/crm/ClientCard';
+import { ClientVisitCard, type VisitAppointment, type VisitClient } from '@/components/crm/ClientVisitCard';
 import { ClientEditDialog, type ClientEditPayload } from '@/components/crm/ClientEditDialog';
 import { CrmMastersManager } from '@/components/crm/CrmMastersManager';
 import { CrmWorkspaceSettings } from '@/components/crm/CrmWorkspaceSettings';
@@ -13,8 +14,6 @@ import {
   type CrmClientStatus,
   type CrmVisitStatus,
   type IntervalCompliance,
-  STATUS_CLASS,
-  STATUS_RU,
   money,
   nextStatus,
 } from '@/components/crm/types';
@@ -65,6 +64,7 @@ type CrmAppointment = {
     birthDate?: string | null;
     status: CrmClientStatus;
     visitsCount: number;
+    discountPercent?: number;
     lastProcedureAt?: string | null;
     recommendedNextAt?: string | null;
   };
@@ -118,16 +118,6 @@ export default function CrmPage() {
   const dIntervalQ = useDebouncedValue(intervalQ, 350);
   const [fullName, setFullName] = React.useState('');
   const [phone, setPhone] = React.useState('');
-  const [procedureClientId, setProcedureClientId] = React.useState('');
-  const [procedureDate, setProcedureDate] = React.useState('');
-  const [procedureService, setProcedureService] = React.useState('');
-  const [procedureCost, setProcedureCost] = React.useState('');
-  const [procedureDiscount, setProcedureDiscount] = React.useState('');
-  const [extraService, setExtraService] = React.useState('');
-  const [extraCost, setExtraCost] = React.useState('');
-  const [intervalDays, setIntervalDays] = React.useState('');
-  const [procedureSearch, setProcedureSearch] = React.useState('');
-  const dProcedureSearch = useDebouncedValue(procedureSearch, 300);
   const [editingClient, setEditingClient] = React.useState<ClientEditTarget | null>(null);
 
   const clientsQ = useQuery({
@@ -135,13 +125,6 @@ export default function CrmPage() {
     queryFn: () => apiJson<CrmClient[]>(`/crm/clients?q=${encodeURIComponent(dq)}`),
     staleTime: 30_000,
     enabled: !isMaster && (tab === 'clients' || tab === 'appointments'),
-  });
-
-  const procedureClientsQ = useQuery({
-    queryKey: ['crm', 'procedure-picker', dProcedureSearch],
-    queryFn: () => apiJson<CrmClient[]>(`/crm/clients?q=${encodeURIComponent(dProcedureSearch)}`),
-    enabled: !isMaster && tab === 'appointments' && dProcedureSearch.trim().length > 0,
-    staleTime: 20_000,
   });
 
   const appointmentsQ = useQuery({
@@ -295,37 +278,88 @@ export default function CrmPage() {
   });
 
   const addProcedureMu = useMutation({
-    mutationFn: () =>
-      apiJson(`/crm/clients/${procedureClientId}/procedures`, {
+    mutationFn: ({
+      clientId,
+      procedureDate,
+      service,
+      basePrice,
+      cost,
+      discountPercent,
+      extraService,
+      extraCost,
+      intervalDays,
+    }: {
+      clientId: string;
+      procedureDate: string;
+      service: string;
+      basePrice: number;
+      cost: number;
+      discountPercent?: number;
+      extraService?: string;
+      extraCost?: number;
+      intervalDays: number;
+    }) =>
+      apiJson(`/crm/clients/${clientId}/procedures`, {
         method: 'POST',
         body: JSON.stringify({
           procedureDate,
-          service: procedureService,
-          basePrice: Number(procedureCost || 0),
-          cost: Number(procedureCost || 0),
-          discountPercent: procedureDiscount ? Number(procedureDiscount) : undefined,
-          extraService: extraService.trim() || undefined,
-          extraCost: extraCost ? Number(extraCost) : undefined,
-          intervalDays: Number(intervalDays || 0),
+          service,
+          basePrice,
+          cost,
+          discountPercent,
+          extraService,
+          extraCost,
+          intervalDays,
         }),
       }),
     onSuccess: async () => {
-      setProcedureDate('');
-      setProcedureService('');
-      setProcedureCost('');
-      setProcedureDiscount('');
-      setExtraService('');
-      setExtraCost('');
-      setIntervalDays('');
-      setProcedureClientId('');
-      setProcedureSearch('');
       await invalidateCrm();
       toast.success('Процедура добавлена');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
   });
 
-  const selectedProcedureClient = (procedureClientsQ.data ?? []).find((c) => c.id === procedureClientId);
+  const clientVisitGroups = React.useMemo(() => {
+    const map = new Map<string, { client: VisitClient; appointments: VisitAppointment[] }>();
+    for (const a of appointmentsQ.data ?? []) {
+      const client: VisitClient = {
+        id: a.client.id,
+        fullName: a.client.fullName,
+        phone: a.client.phone,
+        note: a.client.note,
+        birthDate: a.client.birthDate,
+        status: a.client.status,
+        visitsCount: a.client.visitsCount,
+        discountPercent: a.client.discountPercent,
+      };
+      const row: VisitAppointment = {
+        id: a.id,
+        service: a.service,
+        sequenceNumber: a.sequenceNumber,
+        salonName: a.salonName,
+        salonAddress: a.salonAddress,
+        startsAt: a.startsAt,
+        visitStatus: a.visitStatus,
+        interval: a.interval,
+        master: a.master,
+      };
+      const group = map.get(client.id);
+      if (group) group.appointments.push(row);
+      else map.set(client.id, { client, appointments: [row] });
+    }
+    return Array.from(map.values())
+      .map((g) => ({
+        ...g,
+        appointments: [...g.appointments].sort(
+          (x, y) => new Date(x.startsAt).getTime() - new Date(y.startsAt).getTime(),
+        ),
+      }))
+      .sort(
+        (a, b) =>
+          new Date(a.appointments[0]?.startsAt ?? 0).getTime() -
+          new Date(b.appointments[0]?.startsAt ?? 0).getTime(),
+      );
+  }, [appointmentsQ.data]);
 
   const saveClientProfile = (payload: ClientEditPayload) => {
     patchClientMu.mutate(
@@ -345,17 +379,6 @@ export default function CrmPage() {
       },
     );
   };
-
-  const procedurePreview = React.useMemo(() => {
-    const base = Number(procedureCost || 0);
-    const pct = Math.min(100, Math.max(0, Number(procedureDiscount || selectedProcedureClient?.discountPercent || 0)));
-    const extra = Number(extraCost || 0);
-    const discountAmount = Math.round((base * pct) / 100);
-    const finalMain = base - discountAmount;
-    const finalPrice = finalMain + extra;
-    const masterSalary = Math.round(base * 0.18) + extra;
-    return { base, pct, discountAmount, finalPrice, masterSalary };
-  }, [procedureCost, procedureDiscount, extraCost, selectedProcedureClient?.discountPercent]);
 
   if (isViewer) {
     return (
@@ -478,148 +501,47 @@ export default function CrmPage() {
           </TabsContent>
 
           <TabsContent value="appointments" className="space-y-4">
-
             <Card>
               <CardHeader
                 title="Новая запись"
-                description="Поиск по ФИО или новый клиент. Укажите номер процедуры — система проверит интервал 25/35 дней."
+                description="Найдите клиента или создайте нового — после сохранения появится карточка с записью и завершением процедуры."
               />
               <AppointmentBookingForm
                 disabled={!canWrite}
                 pending={createAppointmentMu.isPending}
-                onSubmit={(payload) => createAppointmentMu.mutate(payload)}
+                onSubmit={(payload) => createAppointmentMu.mutateAsync(payload)}
               />
             </Card>
 
             <Card>
-              <CardHeader title="Завершить процедуру" description="Интервал вручную: мин. 25 дн. (1–3), мин. 35 дн. (с 4-й)." />
-              <div className="space-y-3">
-                <Input
-                  placeholder="Найти клиента по ФИО"
-                  value={procedureSearch}
-                  onChange={(e) => setProcedureSearch(e.target.value)}
-                />
-                {(procedureClientsQ.data ?? []).length > 0 && !procedureClientId ?
-                  <div className="max-h-40 overflow-y-auto rounded-lg border">
-                    {(procedureClientsQ.data ?? []).map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="block w-full border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-black/[0.03]"
-                        onClick={() => {
-                          setProcedureClientId(c.id);
-                          setProcedureSearch(c.fullName);
-                          const next = c.visitsCount + 1;
-                          setIntervalDays(String(next <= 3 ? 25 : 35));
-                          setProcedureDiscount(c.discountPercent ? String(c.discountPercent) : '');
-                        }}
-                      >
-                        <span className="font-medium">{c.fullName}</span>
-                        <span className="ml-2 text-muted">№{c.visitsCount + 1} · {c.phone || 'без тел.'}</span>
-                      </button>
-                    ))}
-                  </div>
-                : null}
-                {selectedProcedureClient ?
-                  <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm dark:bg-white/[0.06]">
-                    {selectedProcedureClient.fullName} — процедура №{selectedProcedureClient.visitsCount + 1}
-                  </div>
-                : null}
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <Input type="date" value={procedureDate} onChange={(e) => setProcedureDate(e.target.value)} />
-                  <Input placeholder="Услуга" value={procedureService} onChange={(e) => setProcedureService(e.target.value)} />
-                  <Input placeholder="Цена основной услуги" type="number" value={procedureCost} onChange={(e) => setProcedureCost(e.target.value)} />
-                  <Input
-                    placeholder={`Скидка %${selectedProcedureClient?.discountPercent ? ` (клиент ${selectedProcedureClient.discountPercent}%)` : ''}`}
-                    type="number"
-                    value={procedureDiscount}
-                    onChange={(e) => setProcedureDiscount(e.target.value)}
-                  />
-                  <Input placeholder="Доп. услуга" value={extraService} onChange={(e) => setExtraService(e.target.value)} />
-                  <Input placeholder="Цена доп. услуги" type="number" value={extraCost} onChange={(e) => setExtraCost(e.target.value)} />
-                  <Input placeholder="Интервал (дни) *" type="number" value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)} />
-                </div>
-                {procedureCost ?
-                  <div className="rounded-lg border px-3 py-2 text-sm">
-                    <span className="text-rose-600 line-through dark:text-rose-400">{procedurePreview.base.toLocaleString('ru-RU')} ₽</span>
-                    {' → '}
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                      {procedurePreview.finalPrice.toLocaleString('ru-RU')} ₽
-                    </span>
-                    {procedurePreview.pct > 0 ?
-                      <span className="ml-2 text-muted">(скидка {procedurePreview.pct}% = −{procedurePreview.discountAmount} ₽)</span>
-                    : null}
-                    <span className="ml-2 text-muted">· ЗП мастера: {procedurePreview.masterSalary.toLocaleString('ru-RU')} ₽</span>
-                  </div>
-                : null}
-                <Button
-                  disabled={!canWrite || !procedureClientId || !procedureDate || !procedureService.trim() || !intervalDays || addProcedureMu.isPending}
-                  onClick={() => addProcedureMu.mutate()}
-                >
-                  Добавить процедуру
-                </Button>
-              </div>
-            </Card>
-
-            <Card>
-              <CardHeader title="Расписание" />
-              <div className="space-y-3">
+              <CardHeader title="Клиенты и записи" description="Одна карточка на клиента: записи, статусы и завершение процедуры." />
+              <div className="space-y-4">
                 {appointmentsQ.isLoading ?
                   <Skeleton className="h-44" />
-                : (appointmentsQ.data ?? []).map((a) => (
-                    <div key={a.id} className="rounded-xl border border-stroke p-4 dark:border-white/[0.08]">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-lg font-semibold">{a.client.fullName}</div>
-                          <div className="mt-1 text-sm text-muted">{a.client.phone || 'Телефон не указан'}</div>
-                        </div>
-                        <Badge className={STATUS_CLASS[a.client.status]}>{STATUS_RU[a.client.status]}</Badge>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        <div><div className="text-[10px] font-semibold uppercase text-muted">Дата</div><div className="font-medium">{new Date(a.startsAt).toLocaleString('ru-RU')}</div></div>
-                        <div><div className="text-[10px] font-semibold uppercase text-muted">Мастер</div><div className="font-medium">{a.master?.name ?? '—'}</div></div>
-                        <div><div className="text-[10px] font-semibold uppercase text-muted">Процедура №</div><div className="font-medium">{a.sequenceNumber}</div></div>
-                        <div><div className="text-[10px] font-semibold uppercase text-muted">Услуга</div><div className="font-medium">{a.service}</div></div>
-                        <div className="sm:col-span-2"><div className="text-[10px] font-semibold uppercase text-muted">Салон</div><div className="font-medium">{a.salonName ?? '—'}{a.salonAddress ? ` · ${a.salonAddress}` : ''}</div></div>
-                      </div>
-                      {a.interval && !a.interval.intervalOk ?
-                        <div className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">{a.interval.message}</div>
-                      : null}
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canWrite}
-                          onClick={() =>
-                            setEditingClient({
-                              id: a.client.id,
-                              fullName: a.client.fullName,
-                              phone: a.client.phone,
-                              note: a.client.note,
-                              birthDate: a.client.birthDate,
-                            })
-                          }
-                        >
-                          Изменить клиента
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'ARRIVED' })}>Пришла</Button>
-                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'NO_SHOW' })}>Не пришла</Button>
-                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'RESCHEDULED' })}>Перенесла</Button>
-                        <Button size="sm" variant="outline" disabled={!canWrite} onClick={() => setVisitStatusMu.mutate({ id: a.id, visitStatus: 'CANCELED' })}>Отменила</Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
-                          disabled={!canWrite || deleteAppointmentMu.isPending}
-                          onClick={() => {
-                            if (!window.confirm(`Удалить запись «${a.client.fullName}» на ${new Date(a.startsAt).toLocaleString('ru-RU')}?`)) return;
-                            deleteAppointmentMu.mutate(a.id);
-                          }}
-                        >
-                          Удалить
-                        </Button>
-                      </div>
-                    </div>
+                : !clientVisitGroups.length ?
+                  <p className="text-sm text-muted">Записей пока нет — создайте первую выше.</p>
+                : clientVisitGroups.map((group) => (
+                    <ClientVisitCard
+                      key={group.client.id}
+                      client={group.client}
+                      appointments={group.appointments}
+                      canWrite={canWrite}
+                      addProcedurePending={addProcedureMu.isPending}
+                      createAppointmentPending={createAppointmentMu.isPending}
+                      onEditClient={(c) =>
+                        setEditingClient({
+                          id: c.id,
+                          fullName: c.fullName,
+                          phone: c.phone,
+                          note: c.note,
+                          birthDate: c.birthDate,
+                        })
+                      }
+                      onVisitStatus={(id, visitStatus) => setVisitStatusMu.mutate({ id, visitStatus })}
+                      onDeleteAppointment={(id) => deleteAppointmentMu.mutate(id)}
+                      onAddProcedure={(clientId, payload) => addProcedureMu.mutateAsync({ clientId, ...payload })}
+                      onCreateAppointment={(payload) => createAppointmentMu.mutateAsync(payload)}
+                    />
                   ))}
               </div>
             </Card>

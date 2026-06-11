@@ -813,6 +813,7 @@ export class CrmService {
             birthDate: true,
             status: true,
             visitsCount: true,
+            discountPercent: true,
             lastProcedureAt: true,
             recommendedNextAt: true,
           },
