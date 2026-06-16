@@ -6,4 +6,8 @@
 # env
 backend/.env
 frontend/.env
+backend/.env.neon
 .env.local
+
+# database dumps (не коммитить)
+backups/

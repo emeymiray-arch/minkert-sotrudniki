@@ -467,6 +467,14 @@ export default function CrmPage() {
             : expectedAppointments.map((a) => (
                 <div key={a.id} className="rounded-xl border border-stroke p-4 dark:border-white/[0.08]">
                   <div className="text-lg font-semibold">{a.client.fullName}</div>
+                  {a.client.phone?.trim() ?
+                    <a
+                      href={`tel:${a.client.phone.replace(/[^\d+]/g, '')}`}
+                      className="mt-1 inline-block text-sm font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                    >
+                      {a.client.phone}
+                    </a>
+                  : <div className="mt-1 text-sm text-muted">Телефон не указан</div>}
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <div><span className="text-xs uppercase text-muted">Время</span><div className="font-medium">{new Date(a.startsAt).toLocaleString('ru-RU')}</div></div>
                     <div><span className="text-xs uppercase text-muted">Мастер</span><div className="font-medium">{a.master?.name ?? '—'}</div></div>

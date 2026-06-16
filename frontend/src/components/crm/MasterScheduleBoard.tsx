@@ -16,6 +16,7 @@ type ScheduleItem = {
   durationMinutes: number;
   service: string;
   clientName: string;
+  clientPhone?: string;
   visitStatus: CrmVisitStatus;
   canceled: boolean;
 };
@@ -33,6 +34,11 @@ type ScheduleResponse = {
   dayEnd: string;
   masters: ScheduleMaster[];
 };
+
+function phoneHref(phone: string) {
+  const digits = phone.replace(/[^\d+]/g, '');
+  return digits ? `tel:${digits}` : undefined;
+}
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -102,6 +108,18 @@ export function MasterScheduleBoard() {
                         {item.timeLabel}
                       </div>
                       <div className={cn('font-medium', item.canceled && 'no-underline')}>{item.clientName}</div>
+                      {item.clientPhone?.trim() ?
+                        <a
+                          href={phoneHref(item.clientPhone)}
+                          className={cn(
+                            'text-xs font-medium tabular-nums underline-offset-2 hover:underline',
+                            item.canceled ? 'text-zinc-600 dark:text-zinc-400' : 'text-sky-800 dark:text-sky-200',
+                          )}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {item.clientPhone}
+                        </a>
+                      : <div className="text-xs opacity-70">Телефон не указан</div>}
                       <div className="text-xs opacity-90">{item.service}</div>
                     </div>
                   ))}
