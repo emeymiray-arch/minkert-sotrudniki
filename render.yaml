@@ -29,3 +29,7 @@ services:
         value: "3600"
       - key: JWT_REFRESH_EXPIRES_DAYS
         value: "14"
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"

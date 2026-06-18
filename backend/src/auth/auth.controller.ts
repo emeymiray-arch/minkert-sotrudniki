@@ -1,4 +1,5 @@
 import { Body, Controller, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -14,12 +15,14 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);
   }
 
   @Public()
+  @Throttle({ default: { limit: 40, ttl: 60_000 } })
   @Post('refresh')
   async refresh(@Body() dto: RefreshDto) {
     const tokens = await this.auth.refresh(dto.refreshToken);
@@ -33,12 +36,14 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('logout')
   logout(@Body() dto: RefreshDto) {
     return this.auth.logout(dto.refreshToken);
   }
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
   @Post('bootstrap')
   bootstrap(@Body() dto: RegisterDto) {
     return this.auth.registerBootstrap({

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators/public.decorator';
 import { PatchPublicTaskDayDto } from './dto/patch-public-task-day.dto';
 import { TasksService } from './tasks.service';
@@ -18,6 +19,7 @@ export class PublicEmployeeTasksController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 40, ttl: 60_000 } })
   @Patch(':token/tasks/:taskId')
   patchDay(
     @Param('token') token: string,

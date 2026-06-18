@@ -35,9 +35,10 @@ describe('Health check (e2e)', () => {
     await app.close();
   });
 
-  it('GET /api/health доступен без авторизации', () => {
+  it('GET /api/health доступен без авторизации и проверяет БД', () => {
     return request(app.getHttpServer()).get('/api/health').expect(200).expect((res) => {
       expect(res.body.ok).toBe(true);
+      expect(res.body.db).toBe('up');
     });
   });
 });

@@ -120,6 +120,9 @@ export class AuthService {
 
   /** Только когда в базе нет пользователей — создаётся первый ADMIN для bootstrap. */
   async registerBootstrap(dto: { email: string; password: string; name: string }) {
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_BOOTSTRAP !== 'true') {
+      throw new ForbiddenException('Регистрация отключена в production');
+    }
     const count = await this.users.countUsers();
     if (count > 0) {
       throw new ForbiddenException(

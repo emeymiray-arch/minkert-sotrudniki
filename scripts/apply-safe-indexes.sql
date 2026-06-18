@@ -21,3 +21,5 @@ CREATE INDEX IF NOT EXISTS "CrmClient_phoneNormalized_trgm_idx"
 
 CREATE INDEX IF NOT EXISTS "AppNotification_kind_createdAt_idx"
   ON "AppNotification"("kind", "createdAt" DESC);
+
+CREATE INDEX IF NOT EXISTS "RefreshToken_expiresAt_idx" ON "RefreshToken"("expiresAt");

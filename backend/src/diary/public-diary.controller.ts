@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators/public.decorator';
 import { DiaryService } from './diary.service';
 import { SavePublicDiaryDayDto } from './dto/save-public-diary-day.dto';
@@ -21,12 +22,14 @@ export class PublicDiaryController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 40, ttl: 60_000 } })
   @Put(':token/days/:date')
   putDay(@Param('token') token: string, @Param('date') date: string, @Body() dto: SavePublicDiaryDayDto) {
     return this.diary.savePublicDay(token, date, dto.lines);
   }
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post(':token/submit')
   submit(@Param('token') token: string, @Body() dto: SubmitPublicDiaryDto) {
     return this.diary.submitPublicDay(token, dto.date);
