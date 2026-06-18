@@ -92,9 +92,8 @@ CREATE INDEX "CrmProcedure_procedureDate_idx" ON "CrmProcedure"("procedureDate")
 
 ### 2.10 Deploy (`render.yaml`)
 
-- `prisma generate` в `buildCommand` — **без** автоматического `migrate deploy` (чтобы не трогать прод-БД при деплое)
+- `prisma migrate deploy` **не** в `buildCommand` — миграции применяются вручную после бэкапа (`scripts/apply-safe-indexes.sql`)
 - `startCommand: npm run start:prod`
-- Миграции применяются **вручную** после бэкапа (см. раздел «Безопасная работа с БД»)
 
 ### 2.11 Auth — исправление MASTER scope
 
@@ -255,7 +254,7 @@ refetchOnWindowFocus: false, // для тяжёлых списков
 
 ### Infra
 
-- [x] generate в build (миграции — только вручную)
+- [x] migrate deploy в build
 - [x] Neon backup automation
 - [ ] Pooled DATABASE_URL
 - [ ] Render plan upgrade + health checks
@@ -287,46 +286,18 @@ npx autocannon -c 10 -d 30 -H "Authorization: Bearer $TOKEN" \
 
 ---
 
-## 6. Безопасная работа с БД (важно)
+## 6. Порядок деплоя
 
-**`prisma migrate deploy` не стирает данные.** Он только применяет новые SQL-миграции (индексы, колонки). В этом проекте **нет** миграций с `DROP TABLE`, `TRUNCATE` или массовым `DELETE`.
-
-### Что реально удаляет данные (не запускать на проде)
-
-| Команда | Эффект |
-|---------|--------|
-| `prisma migrate reset` | Полная очистка БД |
-| `prisma db push --force-reset` | Пересоздание схемы |
-| `prisma db seed` на проде | Добавляет демо-данные (не стирает, но не нужно) |
-| Неверный `DATABASE_URL` | Кажется, что «всё пропало» — подключились к другой/пустой базе |
-
-### Деплой без изменения БД
-
-Оптимизации **пагинации, батчей, Dashboard** работают **без миграций** — меняется только код API и фронта.
-
-Индексы и `pg_trgm` — **опционально**, только для ускорения поиска. Можно не применять.
-
-Автоматический `migrate deploy` **убран** из `render.yaml`. При push на Render обновится только код.
-
-### Когда решите ускорить поиск (по желанию)
-
-1. Бэкап: `./scripts/backup-db.sh neon`
-2. Вручную, один раз: `cd backend && npx prisma migrate deploy` (с `DATABASE_URL` от Neon)
-3. Или только индексы в SQL-редакторе Neon — файлы в `backend/prisma/migrations/20260616*` и `20260618*`
-
----
-
-## 7. Порядок деплоя
-
-1. `git push` → Render build (только код, БД не трогается)
+1. `git push` → Render build (без автоматических миграций БД)
 2. Проверить `/api/health`
-3. Vercel redeploy фронта (если не auto)
+3. **Опционально** после бэкапа: выполнить `scripts/apply-safe-indexes.sql` в Neon SQL Editor
+4. Vercel redeploy фронта (если не auto)
 4. Smoke-test: CRM списки, Dashboard, запись на приём MASTER-аккаунтом
 5. Мониторинг 24 ч: Neon CPU, Render memory, slow queries
 
 ---
 
-## 8. Оценка масштаба
+## 7. Оценка масштаба
 
 | Клиентов | Без фазы 2 | С фазой 2 (trigram + denorm + cache) |
 |----------|------------|--------------------------------------|
@@ -337,7 +308,7 @@ npx autocannon -c 10 -d 30 -H "Authorization: Bearer $TOKEN" \
 
 ---
 
-## 9. Файлы изменений (справочник)
+## 8. Файлы изменений (справочник)
 
 | Область | Путь |
 |---------|------|
