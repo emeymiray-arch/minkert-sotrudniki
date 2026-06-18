@@ -78,14 +78,24 @@ export class CrmController {
   listClients(
     @Query('q') q?: string,
     @Query('phone') phone?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @CurrentUser() user?: JwtUserPayload,
   ) {
-    return this.crm.listClients(q, phone, user);
+    return this.crm.listClients(q, phone, user, page, limit);
   }
 
   @Get('clients/:id')
-  getClient(@Param('id') id: string) {
-    return this.crm.getClient(id);
+  getClient(
+    @Param('id') id: string,
+    @Query('proceduresLimit') proceduresLimit?: string,
+    @Query('appointmentsLimit') appointmentsLimit?: string,
+  ) {
+    return this.crm.getClient(
+      id,
+      proceduresLimit ? Number(proceduresLimit) : undefined,
+      appointmentsLimit ? Number(appointmentsLimit) : undefined,
+    );
   }
 
   @Post('clients')
@@ -179,9 +189,11 @@ export class CrmController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('masterId') masterId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @CurrentUser() user?: JwtUserPayload,
   ) {
-    return this.crm.listAppointments(from, to, masterId, user);
+    return this.crm.listAppointments(from, to, masterId, user, page, limit);
   }
 
   @Patch('appointments/:id')
@@ -229,22 +241,30 @@ export class CrmController {
   @Get('intervals')
   intervals(
     @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @CurrentUser() user?: JwtUserPayload,
   ) {
-    return this.crm.listIntervals(q, user);
+    return this.crm.listIntervals(q, user, page, limit);
   }
 
   @Get('repeat-needed')
   repeatNeeded(
     @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @CurrentUser() user?: JwtUserPayload,
   ) {
-    return this.crm.dueForRepeat(q, user);
+    return this.crm.dueForRepeat(q, user, page, limit);
   }
 
   @Get('lost')
-  lost(@Query('days') days?: string) {
-    return this.crm.lostClients(days ? Number(days) : 90);
+  lost(
+    @Query('days') days?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.crm.lostClients(days ? Number(days) : 90, page, limit);
   }
 
   @Get('analytics')

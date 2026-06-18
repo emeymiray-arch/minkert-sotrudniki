@@ -9,6 +9,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiJson } from '@/lib/http';
+import { type Paginated } from '@/lib/pagination';
 import { cn } from '@/lib/utils';
 
 type LoyaltyStamp = {
@@ -33,7 +34,10 @@ export default function LoyaltyPage() {
 
   const clientsQ = useQuery({
     queryKey: ['loyalty', q],
-    queryFn: () => apiJson<LoyaltyClient[]>(`/loyalty/clients${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+    queryFn: () =>
+      apiJson<Paginated<LoyaltyClient>>(
+        `/loyalty/clients${q.trim() ? `?q=${encodeURIComponent(q.trim())}&page=1&limit=50` : '?page=1&limit=50'}`,
+      ),
   });
 
   const createMu = useMutation({
@@ -80,9 +84,9 @@ export default function LoyaltyPage() {
 
       {clientsQ.isLoading ?
         <Skeleton className="h-[240px]" />
-      : clientsQ.data?.length ?
+      : clientsQ.data?.items.length ?
         <div className="space-y-4">
-          {clientsQ.data.map((client) => (
+          {clientsQ.data.items.map((client) => (
             <LoyaltyClientCard key={client.id} client={client} />
           ))}
         </div>

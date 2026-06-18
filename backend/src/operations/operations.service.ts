@@ -134,8 +134,12 @@ export class OperationsService {
     });
   }
 
-  private readonly taskInclude = {
+  private readonly taskListInclude = {
     assignee: { select: { id: true, name: true, position: true } },
+  };
+
+  private readonly taskInclude = {
+    ...this.taskListInclude,
     comments: { orderBy: { createdAt: 'desc' as const }, take: 3 },
     notes: { orderBy: { updatedAt: 'desc' as const }, take: 2 },
   };
@@ -177,7 +181,7 @@ export class OperationsService {
       where: taskWhere,
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
-        ...this.taskInclude,
+        ...this.taskListInclude,
         category: { select: { title: true } },
       },
     });
@@ -249,6 +253,13 @@ export class OperationsService {
       where: { taskId: { in: taskIds }, recordDate: fromDate },
     });
 
+    const existingTargets = await this.prisma.opsTaskCheckEntry.findMany({
+      where: { taskId: { in: taskIds }, recordDate: toDate },
+    });
+    const existingMap = new Map(
+      existingTargets.map((e) => [`${e.taskId}:${e.employeeId}`, e] as const),
+    );
+
     let copied = 0;
     let skipped = 0;
     const recorder = user?.email ?? 'Контроль';
@@ -256,15 +267,7 @@ export class OperationsService {
     for (const src of sourceEntries) {
       if (!checkEntryHasStoredData(src)) continue;
 
-      const existing = await this.prisma.opsTaskCheckEntry.findUnique({
-        where: {
-          taskId_employeeId_recordDate: {
-            taskId: src.taskId,
-            employeeId: src.employeeId,
-            recordDate: toDate,
-          },
-        },
-      });
+      const existing = existingMap.get(`${src.taskId}:${src.employeeId}`);
       if (existing && checkEntryHasStoredData(existing)) {
         skipped += 1;
         continue;
@@ -432,7 +435,7 @@ export class OperationsService {
     const items = await this.prisma.opsTask.findMany({
       where,
       orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: this.taskInclude,
+      include: this.taskListInclude,
     });
     return { forDate: isoDate(forDate), block, items };
   }

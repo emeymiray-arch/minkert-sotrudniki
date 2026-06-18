@@ -466,6 +466,8 @@ model CrmClient {
   @@index([phoneNormalized])
   @@index([status, recommendedNextAt])
   @@index([lastProcedureAt])
+  @@index([updatedAt])
+  @@index([createdAt])
 }
 
 model CrmMaster {
@@ -514,6 +516,7 @@ model CrmProcedure {
 
   @@index([clientId, procedureDate])
   @@index([masterId, procedureDate])
+  @@index([procedureDate])
 }
 
 model CrmAppointment {

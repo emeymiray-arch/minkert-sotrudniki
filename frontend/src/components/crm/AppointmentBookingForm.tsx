@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { apiJson } from '@/lib/http';
+import { type Paginated } from '@/lib/pagination';
 
 type CrmSalon = { id: string; name: string; address: string };
 type Master = { id: string; name: string; specialty?: string; phone?: string };
@@ -61,8 +62,9 @@ export function AppointmentBookingForm({
   }, [workspaceQ.data, salonId, masterId]);
 
   const searchQ = useQuery({
-    queryKey: ['crm', 'picker', dq],
-    queryFn: () => apiJson<CrmClient[]>(`/crm/clients?q=${encodeURIComponent(dq)}`),
+    queryKey: ['crm', 'clients', dq, 1],
+    queryFn: () =>
+      apiJson<Paginated<CrmClient>>(`/crm/clients?q=${encodeURIComponent(dq)}&page=1&limit=25`),
     enabled: mode === 'search' && dq.trim().length >= 1 && !selected,
     staleTime: 20_000,
   });
@@ -163,9 +165,9 @@ export function AppointmentBookingForm({
             }}
           />
           {searchQ.isFetching ? <div className="text-sm text-muted">Поиск…</div> : null}
-          {!selected && (searchQ.data ?? []).length > 0 ?
+          {!selected && (searchQ.data?.items ?? []).length > 0 ?
             <div className="max-h-52 overflow-y-auto rounded-lg border border-stroke dark:border-white/[0.08]">
-              {(searchQ.data ?? []).map((c) => (
+              {(searchQ.data?.items ?? []).map((c) => (
                 <button
                   key={c.id}
                   type="button"

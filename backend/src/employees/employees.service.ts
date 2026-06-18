@@ -106,10 +106,7 @@ export class EmployeesService {
   async bulkPatch(body: {
     patches: Array<{ employeeId: string; data: UpdateEmployeeDto }>;
   }) {
-    const ops = [];
-    for (const p of body.patches) {
-      ops.push(await this.update(p.employeeId, p.data));
-    }
+    const ops = await Promise.all(body.patches.map((p) => this.update(p.employeeId, p.data)));
     return { updated: ops.length };
   }
 }

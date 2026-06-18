@@ -14,8 +14,12 @@ export class InsightsController {
   }
 
   @Get('clients/unified')
-  unifiedClients(@Query('q') q?: string) {
-    return this.insights.unifiedClients(q);
+  unifiedClients(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.insights.unifiedClients(q, page, limit);
   }
 
   @Get('plan')

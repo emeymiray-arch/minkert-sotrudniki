@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginatedResult, parsePagination } from '../common/pagination/pagination.util';
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
@@ -20,33 +21,63 @@ function giftEligible(stamps: Array<{ slot: number }>): boolean {
   return true;
 }
 
+const loyaltyListSelect = {
+  id: true,
+  name: true,
+  phone: true,
+  phoneNormalized: true,
+  createdAt: true,
+  updatedAt: true,
+  stamps: { select: { slot: true, masterName: true }, orderBy: { slot: 'asc' as const } },
+} as const;
+
 @Injectable()
 export class LoyaltyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listClients(query?: string) {
-    const q = query?.trim();
-    const digits = q ? normalizePhone(q) : '';
-    const items = await this.prisma.loyaltyClient.findMany({
-      where:
-        q ?
-          {
-            OR: [
-              { name: { contains: q, mode: 'insensitive' } },
-              { phone: { contains: q, mode: 'insensitive' } },
-              ...(digits ? [{ phoneNormalized: { contains: digits } }] : []),
-            ],
-          }
-        : undefined,
-      include: { stamps: { orderBy: { slot: 'asc' } } },
-      orderBy: [{ updatedAt: 'desc' }],
-      take: 200,
-    });
-    return items.map((c) => ({
+  private mapClient(c: {
+    id: string;
+    name: string;
+    phone: string;
+    phoneNormalized: string;
+    createdAt: Date;
+    updatedAt: Date;
+    stamps: Array<{ slot: number; masterName: string }>;
+  }) {
+    return {
       ...c,
       giftAvailable: giftEligible(c.stamps),
       giftClaimed: c.stamps.some((s) => s.slot === 10),
-    }));
+    };
+  }
+
+  async listClients(query?: string, pageRaw?: string | number, limitRaw?: string | number) {
+    const q = query?.trim();
+    const digits = q ? normalizePhone(q) : '';
+    const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
+    const where =
+      q ?
+        {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' as const } },
+            { phone: { contains: q, mode: 'insensitive' as const } },
+            ...(digits ? [{ phoneNormalized: { contains: digits } }] : []),
+          ],
+        }
+      : undefined;
+
+    const [total, rows] = await Promise.all([
+      this.prisma.loyaltyClient.count({ where }),
+      this.prisma.loyaltyClient.findMany({
+        where,
+        select: loyaltyListSelect,
+        orderBy: [{ updatedAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return paginatedResult(rows.map((c) => this.mapClient(c)), total, page, limit);
   }
 
   async createClient(body: { name: string; phone: string }) {
@@ -56,17 +87,18 @@ export class LoyaltyService {
     if (!name) throw new BadRequestException('Имя клиента обязательно');
     if (phoneNormalized.length < 10) throw new BadRequestException('Введите корректный номер телефона');
 
-    return this.prisma.loyaltyClient.create({
+    const row = await this.prisma.loyaltyClient.create({
       data: { name, phone, phoneNormalized },
-      include: { stamps: { orderBy: { slot: 'asc' } } },
+      select: loyaltyListSelect,
     });
+    return this.mapClient(row);
   }
 
   async upsertStamp(clientId: string, slotRaw: number, masterName: string) {
     const slot = validateSlot(slotRaw);
     const client = await this.prisma.loyaltyClient.findUnique({
       where: { id: clientId },
-      include: { stamps: true },
+      select: loyaltyListSelect,
     });
     if (!client) throw new NotFoundException('Клиент не найден');
 
@@ -87,12 +119,8 @@ export class LoyaltyService {
 
     const updated = await this.prisma.loyaltyClient.findUniqueOrThrow({
       where: { id: clientId },
-      include: { stamps: { orderBy: { slot: 'asc' } } },
+      select: loyaltyListSelect,
     });
-    return {
-      ...updated,
-      giftAvailable: giftEligible(updated.stamps),
-      giftClaimed: updated.stamps.some((s) => s.slot === 10),
-    };
+    return this.mapClient(updated);
   }
 }

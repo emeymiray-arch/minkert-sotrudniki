@@ -9,8 +9,12 @@ export class LoyaltyController {
   constructor(private readonly loyalty: LoyaltyService) {}
 
   @Get('clients')
-  list(@Query('q') q?: string) {
-    return this.loyalty.listClients(q);
+  list(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.loyalty.listClients(q, page, limit);
   }
 
   @Post('clients')

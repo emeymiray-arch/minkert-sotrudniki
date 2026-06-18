@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Briefcase, Heart, LineChart, Users2, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { AiInsightCard } from '@/components/insights/AiInsightCard';
+import { AiInsightCard, type AiInsight } from '@/components/insights/AiInsightCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -56,6 +56,13 @@ type UnifiedDashboard = {
     totalClients: number;
     active30d: number;
     index: number;
+  };
+  ai: {
+    director: AiInsight;
+    finance: AiInsight;
+    hr: AiInsight;
+    marketing: AiInsight;
+    operations: AiInsight;
   };
 };
 
@@ -132,11 +139,21 @@ export default function DashboardPage() {
       />
 
       {dash.isLoading ?
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-36" />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-36" />
+            ))}
+          </div>
+          <div>
+            <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">AI-анализ</h2>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-28" />
+              ))}
+            </div>
+          </div>
+        </>
       : !d ?
         <Card>
           <CardHeader title="Нет данных" description="Не удалось загрузить сводку." />
@@ -243,12 +260,12 @@ export default function DashboardPage() {
           <div>
             <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">AI-анализ</h2>
             <div className="grid gap-4 lg:grid-cols-2">
-              <AiInsightCard title="AI-Директор" endpoint="/insights/ai/director" description="Сводные выводы по всем направлениям" />
-              <AiInsightCard title="AI Финансист" endpoint="/insights/ai/finance" />
-              <AiInsightCard title="AI HR" endpoint="/insights/ai/hr" />
-              <AiInsightCard title="AI Маркетолог" endpoint="/insights/ai/marketing" />
+              <AiInsightCard title="AI-Директор" data={d.ai.director} description="Сводные выводы по всем направлениям" />
+              <AiInsightCard title="AI Финансист" data={d.ai.finance} />
+              <AiInsightCard title="AI HR" data={d.ai.hr} />
+              <AiInsightCard title="AI Маркетолог" data={d.ai.marketing} />
               <div className="lg:col-span-2">
-                <AiInsightCard title="AI Операционный" endpoint="/insights/ai/operations" />
+                <AiInsightCard title="AI Операционный" data={d.ai.operations} />
               </div>
             </div>
           </div>

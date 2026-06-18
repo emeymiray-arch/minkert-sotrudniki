@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { addUtcDays, endUtcMonth, startUtcMonth, startUtcWeekMonday } from '../common/date/week';
+import { paginatedResult, parsePagination } from '../common/pagination/pagination.util';
 import { CrmService } from '../crm/crm.service';
 import { OperationsFinanceService } from '../operations/operations-finance.service';
 import { OperationsService } from '../operations/operations.service';
@@ -79,7 +80,7 @@ export class InsightsService {
     };
   }
 
-  async unifiedDashboard() {
+  private async loadDashboardContext() {
     const today = utcToday();
     const weekStart = startUtcWeekMonday(today);
     const weekEnd = addUtcDays(weekStart, 6);
@@ -104,7 +105,7 @@ export class InsightsService {
       loyaltyTotal,
       loyaltyActive,
       problemsOpen,
-      intervalsDue,
+      intervalsPage,
       crmClientsTotal,
       crmNewMonth,
     ] = await Promise.all([
@@ -121,17 +122,20 @@ export class InsightsService {
         where: { updatedAt: { gte: addUtcDays(today, -30) } },
       }),
       this.prisma.opsProblem.count({ where: { resolved: false } }),
-      this.crm.dueForRepeat(),
+      this.crm.listIntervals(undefined, undefined, 1, 500),
       this.prisma.crmClient.count(),
       this.prisma.crmClient.count({ where: { createdAt: { gte: monthStart } } }),
     ]);
+
+    const intervals = intervalsPage.items;
 
     const weekRevenueTrend =
       prevWeekFin.revenue > 0 ?
         Number((((weekFin.revenue - prevWeekFin.revenue) / prevWeekFin.revenue) * 100).toFixed(1))
       : 0;
 
-    const repeatDue = intervalsDue.length;
+    const repeatDue = intervals.filter((i) => i.urgency === 'overdue' || i.urgency === 'due_soon').length;
+    const overdueIntervals = intervals.filter((i) => i.urgency === 'overdue').length;
     const bestEmployee = teamDash.best[0];
     const bestName =
       bestEmployee ?
@@ -143,7 +147,7 @@ export class InsightsService {
         )?.name ?? '—'
       : '—';
 
-    return {
+    const dash = {
       asOf: today.toISOString().slice(0, 10),
       business: {
         revenueToday: dayFin.revenue,
@@ -191,12 +195,23 @@ export class InsightsService {
         index: loyaltyTotal ? Math.round((loyaltyActive / loyaltyTotal) * 100) : 0,
       },
     };
+
+    return { dash, teamDash, overdueIntervals };
   }
 
-  async unifiedClients(q?: string) {
+  async unifiedDashboard() {
+    const ctx = await this.loadDashboardContext();
+    return {
+      ...ctx.dash,
+      ai: this.buildAiInsights(ctx),
+    };
+  }
+
+  async unifiedClients(q?: string, pageRaw?: string | number, limitRaw?: string | number) {
     const query = q?.trim();
-    const [crmRows, loyaltyRows] = await Promise.all([
-      this.crm.listClients(query),
+    const { page, limit } = parsePagination(pageRaw, limitRaw, 50, 100);
+    const [crmPage, loyaltyRows] = await Promise.all([
+      this.crm.listClients(query, undefined, undefined, page, limit),
       this.prisma.loyaltyClient.findMany({
         where:
           query ?
@@ -208,11 +223,31 @@ export class InsightsService {
               ],
             }
           : undefined,
-        include: { stamps: true },
-        take: 200,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          phoneNormalized: true,
+          updatedAt: true,
+          _count: { select: { stamps: true } },
+          stamps: { where: { slot: 10 }, take: 1, select: { slot: true } },
+        },
+        take: limit,
+        skip: (page - 1) * limit,
         orderBy: { updatedAt: 'desc' },
       }),
     ]);
+
+    const crmRows = crmPage.items as Array<{
+      id: string;
+      fullName: string;
+      phone: string;
+      phoneNormalized: string;
+      status: string;
+      visitsCount: number;
+      totalSpent: number;
+      recommendedNextAt: string | null;
+    }>;
 
     const loyaltyByPhone = new Map<string, (typeof loyaltyRows)[0]>();
     for (const l of loyaltyRows) {
@@ -234,8 +269,8 @@ export class InsightsService {
           loyalty ?
             {
               id: loyalty.id,
-              stamps: loyalty.stamps.length,
-              giftAvailable: loyalty.stamps.length >= 9 && !loyalty.stamps.some((s) => s.slot === 10),
+              stamps: loyalty._count.stamps,
+              giftAvailable: loyalty._count.stamps >= 9 && loyalty.stamps.length === 0,
             }
           : null,
       };
@@ -246,24 +281,18 @@ export class InsightsService {
       fullName: l.name,
       phone: l.phone,
       crmStatus: null,
-      visitsCount: l.stamps.length,
+      visitsCount: l._count.stamps,
       totalSpent: 0,
       recommendedNextAt: null,
       loyalty: {
         id: l.id,
-        stamps: l.stamps.length,
-        giftAvailable: l.stamps.length >= 9 && !l.stamps.some((s) => s.slot === 10),
+        stamps: l._count.stamps,
+        giftAvailable: l._count.stamps >= 9 && l.stamps.length === 0,
       },
     }));
 
-    return [...merged, ...loyaltyOnly].slice(0, 200);
-  }
-
-  private async contextBundle() {
-    const dash = await this.unifiedDashboard();
-    const intervals = await this.crm.listIntervals();
-    const overdueIntervals = intervals.filter((i) => i.urgency === 'overdue').length;
-    return { dash, intervals, overdueIntervals };
+    const items = [...merged, ...loyaltyOnly];
+    return paginatedResult(items, crmPage.total + loyaltyOnly.length, page, limit);
   }
 
   private trendPhrase(delta: number, unit: string) {
@@ -272,8 +301,18 @@ export class InsightsService {
     return `не изменилась ${unit}`;
   }
 
-  async aiDirector() {
-    const { dash, overdueIntervals } = await this.contextBundle();
+  private buildAiInsights(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+    return {
+      director: this.buildAiDirector(ctx),
+      finance: this.buildAiFinance(ctx),
+      hr: this.buildAiHr(ctx),
+      marketing: this.buildAiMarketing(ctx),
+      operations: this.buildAiOperations(ctx),
+    };
+  }
+
+  private buildAiDirector(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+    const { dash, overdueIntervals } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
@@ -305,8 +344,8 @@ export class InsightsService {
     return { role: 'director', conclusions, recommendations };
   }
 
-  async aiFinance() {
-    const dash = (await this.contextBundle()).dash;
+  private buildAiFinance(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+    const { dash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
@@ -329,9 +368,8 @@ export class InsightsService {
     return { role: 'finance', conclusions, recommendations };
   }
 
-  async aiHr() {
-    const dash = (await this.contextBundle()).dash;
-    const team = await this.analytics.teamDashboard(utcToday());
+  private buildAiHr(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+    const { dash, teamDash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
@@ -343,8 +381,8 @@ export class InsightsService {
       conclusions.push(`В зоне риска: ${dash.employees.atRiskCount} сотрудников (KPI ниже 60%).`);
       recommendations.push('Откройте «Сотрудники» → доска KPI и разберите слабые задачи.');
     }
-    if (team.lowPerformingTasks.length > 0) {
-      conclusions.push(`Слабых задач на неделе: ${team.lowPerformingTasks.length}.`);
+    if (teamDash.lowPerformingTasks.length > 0) {
+      conclusions.push(`Слабых задач на неделе: ${teamDash.lowPerformingTasks.length}.`);
     }
     if (!recommendations.length) {
       recommendations.push('Команда работает стабильно — закрепите лучшие практики лидеров.');
@@ -353,8 +391,8 @@ export class InsightsService {
     return { role: 'hr', conclusions, recommendations };
   }
 
-  async aiMarketing() {
-    const dash = (await this.contextBundle()).dash;
+  private buildAiMarketing(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+    const { dash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
@@ -375,8 +413,8 @@ export class InsightsService {
     return { role: 'marketing', conclusions, recommendations };
   }
 
-  async aiOperations() {
-    const dash = (await this.contextBundle()).dash;
+  private buildAiOperations(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+    const { dash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
@@ -399,17 +437,36 @@ export class InsightsService {
     return { role: 'operations', conclusions, recommendations };
   }
 
+  async aiDirector() {
+    const ctx = await this.loadDashboardContext();
+    return this.buildAiDirector(ctx);
+  }
+
+  async aiFinance() {
+    const ctx = await this.loadDashboardContext();
+    return this.buildAiFinance(ctx);
+  }
+
+  async aiHr() {
+    const ctx = await this.loadDashboardContext();
+    return this.buildAiHr(ctx);
+  }
+
+  async aiMarketing() {
+    const ctx = await this.loadDashboardContext();
+    return this.buildAiMarketing(ctx);
+  }
+
+  async aiOperations() {
+    const ctx = await this.loadDashboardContext();
+    return this.buildAiOperations(ctx);
+  }
+
   async batchEmployeeOverviews(ids: string[]) {
     const unique = [...new Set(ids.filter(Boolean))];
     if (!unique.length) return {};
     const to = new Date();
     const from = addUtcDays(to, -56);
-    const entries = await Promise.all(
-      unique.map(async (id) => {
-        const overview = await this.analytics.employeeRangeAnalytics(id, from, to);
-        return [id, overview] as const;
-      }),
-    );
-    return Object.fromEntries(entries);
+    return this.analytics.batchEmployeeRangeAnalytics(unique, from, to);
   }
 }

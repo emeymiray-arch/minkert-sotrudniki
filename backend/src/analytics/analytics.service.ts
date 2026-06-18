@@ -139,11 +139,54 @@ export class AnalyticsService {
         sun: true,
       },
     });
-    const byWeek = new Map<number, TaskWeekRow[]>();
+    return this.employeeRangeAnalyticsFromRows(employeeId, rows as TaskWeekRow[], from, to);
+  }
+
+  async batchEmployeeRangeAnalytics(employeeIds: string[], from: Date, to: Date) {
+    const unique = [...new Set(employeeIds.filter(Boolean))];
+    if (!unique.length) return {} as Record<string, Awaited<ReturnType<AnalyticsService['employeeRangeAnalytics']>>>;
+
+    const rows = await this.prisma.task.findMany({
+      where: { employeeId: { in: unique }, taskDate: { gte: from, lte: to } },
+      orderBy: { taskDate: 'asc' },
+      select: {
+        taskDate: true,
+        employeeId: true,
+        mon: true,
+        tue: true,
+        wed: true,
+        thu: true,
+        fri: true,
+        sat: true,
+        sun: true,
+      },
+    });
+
+    const byEmp = new Map<string, TaskWeekRow[]>();
+    for (const id of unique) byEmp.set(id, []);
     for (const r of rows as TaskWeekRow[]) {
+      byEmp.get(r.employeeId)?.push(r);
+    }
+
+    const out: Record<string, Awaited<ReturnType<AnalyticsService['employeeRangeAnalytics']>>> = {};
+    for (const [id, empRows] of byEmp) {
+      out[id] = this.employeeRangeAnalyticsFromRows(id, empRows, from, to);
+    }
+    return out;
+  }
+
+  private employeeRangeAnalyticsFromRows(
+    employeeId: string,
+    rows: TaskWeekRow[],
+    from: Date,
+    to: Date,
+  ) {
+    void employeeId;
+    const byWeek = new Map<number, TaskWeekRow[]>();
+    for (const r of rows) {
       const monday = startUtcWeekMonday(r.taskDate).getTime();
       const ls = byWeek.get(monday) ?? [];
-      ls.push(r as TaskWeekRow);
+      ls.push(r);
       byWeek.set(monday, ls);
     }
     const ascWeeks = Array.from(byWeek.keys()).sort((a, b) => a - b);
@@ -155,7 +198,7 @@ export class AnalyticsService {
     const monthEnd = endUtcMonth(to);
     const monthRows = rows.filter((r) => r.taskDate >= monthStart && r.taskDate <= monthEnd);
     const monthlyEfficiency = monthRows.length
-      ? this.avg(monthRows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r as TaskWeekRow))))
+      ? this.avg(monthRows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r))))
       : 0;
 
     let growth = 0;
@@ -168,7 +211,6 @@ export class AnalyticsService {
     }
 
     const weeklyPercentsDescending = [...series.map((w) => w.weeklyEfficiency)].reverse();
-
     const dailyOverall = WEEK_DAYS_DB.map((col, idx) => {
       const nums = rows.map((r) => percentForStatus((r as never)[col] as number));
       return { key: col, label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx], efficiency: this.avg(nums) };
@@ -182,7 +224,7 @@ export class AnalyticsService {
       monthlyEfficiency: Number(monthlyEfficiency.toFixed(2)),
       periodEfficiency:
         rows.length ?
-          Number(this.avg(rows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r as TaskWeekRow)))).toFixed(2))
+          Number(this.avg(rows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r)))).toFixed(2))
         : 0,
       dailyHeatByWeekday: dailyOverall,
     };

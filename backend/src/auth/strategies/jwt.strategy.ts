@@ -10,6 +10,7 @@ interface JwtValidated {
   email: string;
   role: UserRole;
   linkedEmployeeId?: string | null;
+  linkedCrmMasterId?: string | null;
 }
 
 @Injectable()
@@ -28,6 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       role: payload.role,
       linkedEmployeeId: payload.linkedEmployeeId ?? null,
+      linkedCrmMasterId: payload.linkedCrmMasterId ?? null,
     };
   }
 }

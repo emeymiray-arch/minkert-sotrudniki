@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Резервная копия PostgreSQL → backups/minkert-backup-ДАТА.dump
+# Резервная копия PostgreSQL → backups/minkert-{local|neon}-ДАТА.dump
 # Использование:
 #   ./scripts/backup-db.sh              — из backend/.env (локальная база)
-#   ./scripts/backup-db.sh neon         — из backend/.env.neon (облако, файл в .gitignore)
+#   ./scripts/backup-db.sh neon         — из backend/.env.neon (облако)
+# Автобэкап Neon (раз в 3 дня) + проверка восстановления (понедельник):
+#   ./scripts/install-neon-backup-schedule.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

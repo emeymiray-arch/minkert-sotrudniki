@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays } from '../common/date/week';
+import { paginatedResult, parsePagination, type Paginated } from '../common/pagination/pagination.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OperationsFinanceService } from '../operations/operations-finance.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -421,7 +422,14 @@ export class CrmService {
     return computeIntervalCompliance(client.visitsCount, client.lastProcedureAt, ref);
   }
 
-  async listClients(q?: string, phone?: string, user?: JwtUserPayload) {
+  async listClients(
+    q?: string,
+    phone?: string,
+    user?: JwtUserPayload,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ): Promise<Paginated<Record<string, unknown>>> {
+    const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const where: Record<string, unknown> = {};
     const nameFilter = this.buildNameFilter(q);
     if (nameFilter) Object.assign(where, nameFilter);
@@ -429,38 +437,84 @@ export class CrmService {
     if (normalizedPhone) where.phoneNormalized = { contains: normalizedPhone };
     this.ensureMasterScope(where, user);
 
-    const rows = await this.prisma.crmClient.findMany({
-      where,
-      include: {
-        appointments: {
-          orderBy: { startsAt: 'desc' },
-          take: 1,
+    const [total, rows] = await Promise.all([
+      this.prisma.crmClient.count({ where }),
+      this.prisma.crmClient.findMany({
+        where,
+        include: {
+          appointments: {
+            orderBy: { startsAt: 'desc' },
+            take: 1,
+            select: { id: true, startsAt: true, service: true, visitStatus: true },
+          },
+          procedures: {
+            orderBy: { procedureDate: 'desc' },
+            take: 1,
+            select: { intervalDays: true, procedureDate: true, service: true, sequenceNumber: true },
+          },
         },
-        procedures: {
-          orderBy: { procedureDate: 'desc' },
-          take: 1,
-          select: { intervalDays: true, procedureDate: true, service: true, sequenceNumber: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 200,
-    });
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
 
     const stampMap = await this.batchLoyaltyStamps(rows.map((c) => c.phoneNormalized));
-    return rows.map((c) => this.enrichClientRow(c, stampMap.get(c.phoneNormalized)));
+    const items = rows.map((c) => this.enrichClientRow(c, stampMap.get(c.phoneNormalized)));
+    return paginatedResult(items, total, page, limit);
   }
 
-  async getClient(id: string) {
+  async getClient(id: string, proceduresLimit = 30, appointmentsLimit = 30) {
+    const procTake = Math.min(100, Math.max(1, Math.round(proceduresLimit)));
+    const apptTake = Math.min(100, Math.max(1, Math.round(appointmentsLimit)));
+
     const row = await this.prisma.crmClient.findUnique({
       where: { id },
       include: {
         procedures: {
-          include: { master: { select: { id: true, name: true } } },
           orderBy: { procedureDate: 'desc' },
+          take: procTake,
+          select: {
+            id: true,
+            procedureDate: true,
+            service: true,
+            cost: true,
+            basePrice: true,
+            discountPercent: true,
+            discountAmount: true,
+            extraService: true,
+            extraCost: true,
+            finalPrice: true,
+            masterSalary: true,
+            intervalDays: true,
+            sequenceNumber: true,
+            masterComment: true,
+            nextVisitDate: true,
+            nextVisitComment: true,
+            nextVisitAdvice: true,
+            masterId: true,
+            master: { select: { id: true, name: true } },
+            createdAt: true,
+            updatedAt: true,
+          },
         },
         appointments: {
-          include: { master: { select: { id: true, name: true } } },
+          select: {
+            id: true,
+            service: true,
+            sequenceNumber: true,
+            salonId: true,
+            startsAt: true,
+            durationMinutes: true,
+            visitStatus: true,
+            comment: true,
+            masterId: true,
+            master: { select: { id: true, name: true } },
+            createdAt: true,
+            updatedAt: true,
+          },
           orderBy: { startsAt: 'desc' },
+          take: apptTake,
         },
       },
     });
@@ -799,7 +853,15 @@ export class CrmService {
     };
   }
 
-  async listAppointments(from?: string, to?: string, masterId?: string, user?: JwtUserPayload) {
+  async listAppointments(
+    from?: string,
+    to?: string,
+    masterId?: string,
+    user?: JwtUserPayload,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ) {
+    const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const where: Record<string, unknown> = {};
     if (masterId?.trim()) where.masterId = masterId.trim();
     const scopedMasterId = this.masterIdForUser(user);
@@ -816,43 +878,48 @@ export class CrmService {
     where.startsAt = { gte: fromDate ?? undefined, lte: toDate ?? undefined };
 
     const config = await this.loadCrmConfig();
-    return this.prisma.crmAppointment.findMany({
-      where,
-      include: {
-        client: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            note: true,
-            birthDate: true,
-            status: true,
-            visitsCount: true,
-            discountPercent: true,
-            lastProcedureAt: true,
-            recommendedNextAt: true,
+    const [total, rows] = await Promise.all([
+      this.prisma.crmAppointment.count({ where }),
+      this.prisma.crmAppointment.findMany({
+        where,
+        include: {
+          client: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              note: true,
+              birthDate: true,
+              status: true,
+              visitsCount: true,
+              discountPercent: true,
+              lastProcedureAt: true,
+              recommendedNextAt: true,
+            },
           },
+          master: { select: { id: true, name: true } },
         },
-        master: { select: { id: true, name: true } },
-      },
-      orderBy: { startsAt: 'asc' },
-      take: 500,
-    }).then((rows) =>
-      rows.map((a) => {
-        const compliance = computeIntervalCompliance(
-          a.client.visitsCount,
-          a.client.lastProcedureAt,
-          a.startsAt,
-        );
-        const salon = this.salonMeta(config, a.salonId);
-        return {
-          ...a,
-          interval: compliance,
-          salonName: salon.name,
-          salonAddress: salon.address,
-        };
+        orderBy: { startsAt: 'asc' },
+        skip,
+        take: limit,
       }),
-    );
+    ]);
+
+    const items = rows.map((a) => {
+      const compliance = computeIntervalCompliance(
+        a.client.visitsCount,
+        a.client.lastProcedureAt,
+        a.startsAt,
+      );
+      const salon = this.salonMeta(config, a.salonId);
+      return {
+        ...a,
+        interval: compliance,
+        salonName: salon.name,
+        salonAddress: salon.address,
+      };
+    });
+    return paginatedResult(items, total, page, limit);
   }
 
   async updateAppointmentStatus(id: string, visitStatus: CrmVisitStatus) {
@@ -935,12 +1002,16 @@ export class CrmService {
     return { ok: true };
   }
 
-  async dueForRepeat(q?: string, user?: JwtUserPayload) {
-    const rows = await this.listIntervals(q, user);
-    return rows.filter((r) => r.urgency === 'overdue' || r.urgency === 'due_soon');
+  async dueForRepeat(q?: string, user?: JwtUserPayload, pageRaw?: string | number, limitRaw?: string | number) {
+    const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
+    const all = await this.listIntervals(q, user, 1, 500);
+    const filtered = all.items.filter((r) => r.urgency === 'overdue' || r.urgency === 'due_soon');
+    const items = filtered.slice(skip, skip + limit);
+    return paginatedResult(items, filtered.length, page, limit);
   }
 
-  async listIntervals(q?: string, user?: JwtUserPayload) {
+  async listIntervals(q?: string, user?: JwtUserPayload, pageRaw?: string | number, limitRaw?: string | number) {
+    const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const where: Record<string, unknown> = {
       procedures: { some: {} },
     };
@@ -949,20 +1020,24 @@ export class CrmService {
     this.ensureMasterScope(where, user);
 
     const today = utcToday();
-    const clients = await this.prisma.crmClient.findMany({
-      where,
-      include: {
-        procedures: {
-          orderBy: { procedureDate: 'desc' },
-          take: 1,
-          select: { intervalDays: true, procedureDate: true, service: true },
+    const [total, clients] = await Promise.all([
+      this.prisma.crmClient.count({ where }),
+      this.prisma.crmClient.findMany({
+        where,
+        include: {
+          procedures: {
+            orderBy: { procedureDate: 'desc' },
+            take: 1,
+            select: { intervalDays: true, procedureDate: true, service: true },
+          },
         },
-      },
-      orderBy: { recommendedNextAt: 'asc' },
-      take: 300,
-    });
+        orderBy: { recommendedNextAt: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
 
-    return clients
+    const items = clients
       .map((c) => {
         const lastProc = c.procedures[0] ?? null;
         const nextAt = this.resolveRecommendedNext(c.recommendedNextAt, lastProc);
@@ -995,22 +1070,28 @@ export class CrmService {
         const db = b.daysUntilNext ?? 9999;
         return da - db;
       });
+
+    return paginatedResult(items, total, page, limit);
   }
 
-  async lostClients(days = 90) {
+  async lostClients(days = 90, pageRaw?: string | number, limitRaw?: string | number) {
+    const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const edge = new Date();
     edge.setUTCDate(edge.getUTCDate() - Math.max(1, Math.round(days)));
-    return this.prisma.crmClient.findMany({
-      where: {
-        OR: [
-          { lastProcedureAt: { lte: edge } },
-          { lastProcedureAt: null },
-        ],
-        appointments: { none: { startsAt: { gte: new Date() } } },
-      },
-      orderBy: { lastProcedureAt: 'asc' },
-      take: 300,
-    });
+    const where = {
+      OR: [{ lastProcedureAt: { lte: edge } }, { lastProcedureAt: null }],
+      appointments: { none: { startsAt: { gte: new Date() } } },
+    };
+    const [total, items] = await Promise.all([
+      this.prisma.crmClient.count({ where }),
+      this.prisma.crmClient.findMany({
+        where,
+        orderBy: { lastProcedureAt: 'asc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+    return paginatedResult(items, total, page, limit);
   }
 
   async analytics() {

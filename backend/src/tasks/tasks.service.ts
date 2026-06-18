@@ -84,16 +84,11 @@ export class TasksService {
     });
     const titles = new Set(target.map((t) => t.title.trim().toLowerCase()));
 
-    let created = 0;
-    let skipped = 0;
-    for (const t of source) {
-      const key = t.title.trim().toLowerCase();
-      if (titles.has(key)) {
-        skipped += 1;
-        continue;
-      }
-      await this.prisma.task.create({
-        data: {
+    const toCreate = source.filter((t) => !titles.has(t.title.trim().toLowerCase()));
+    const skipped = source.length - toCreate.length;
+    if (toCreate.length) {
+      await this.prisma.task.createMany({
+        data: toCreate.map((t) => ({
           employeeId,
           title: t.title,
           description: t.description,
@@ -105,14 +100,12 @@ export class TasksService {
           fri: 0,
           sat: 0,
           sun: 0,
-        },
+        })),
       });
-      titles.add(key);
-      created += 1;
     }
 
     return {
-      created,
+      created: toCreate.length,
       skipped,
       fromWeek: this.isoDate(fromMonday),
       toWeek: this.isoDate(toMonday),

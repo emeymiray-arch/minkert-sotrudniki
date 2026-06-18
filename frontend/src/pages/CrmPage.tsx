@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { apiJson } from '@/lib/http';
+import { type Paginated, paginatedQuery } from '@/lib/pagination';
 import { useAuth } from '@/context/auth';
 
 type CrmIntervalRow = {
@@ -109,6 +110,35 @@ function intervalLabelLocal(row: { daysUntilNext: number | null }) {
   return `Через ${row.daysUntilNext} дн.`;
 }
 
+function PaginationBar({
+  page,
+  pages,
+  total,
+  onPage,
+}: {
+  page: number;
+  pages: number;
+  total: number;
+  onPage: (p: number) => void;
+}) {
+  if (pages <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-sm text-muted">
+      <span>
+        Страница {page} из {pages} · всего {total}
+      </span>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          Назад
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+          Далее
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function CrmPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
@@ -128,58 +158,91 @@ export default function CrmPage() {
   const [editingClient, setEditingClient] = React.useState<ClientEditTarget | null>(null);
   const [editingAppointment, setEditingAppointment] = React.useState<AppointmentEditSource | null>(null);
 
+  const [clientsPage, setClientsPage] = React.useState(1);
+  const [appointmentsPage, setAppointmentsPage] = React.useState(1);
+  const [intervalsPage, setIntervalsPage] = React.useState(1);
+  const [repeatPage, setRepeatPage] = React.useState(1);
+  const [lostPage, setLostPage] = React.useState(1);
+  const [unifiedPage, setUnifiedPage] = React.useState(1);
+
+  React.useEffect(() => {
+    setClientsPage(1);
+  }, [dq]);
+  React.useEffect(() => {
+    setIntervalsPage(1);
+  }, [dIntervalQ]);
+
   const clientsQ = useQuery({
-    queryKey: ['crm', 'clients', dq],
-    queryFn: () => apiJson<CrmClient[]>(`/crm/clients?q=${encodeURIComponent(dq)}`),
+    queryKey: ['crm', 'clients', dq, clientsPage],
+    queryFn: () =>
+      apiJson<Paginated<CrmClient>>(
+        `/crm/clients?q=${encodeURIComponent(dq)}&${paginatedQuery(clientsPage, 50)}`,
+      ),
     staleTime: 30_000,
-    enabled: !isMaster && (tab === 'clients' || tab === 'appointments'),
+    placeholderData: keepPreviousData,
+    enabled: !isMaster && !isViewer && tab === 'clients',
   });
 
   const appointmentsQ = useQuery({
-    queryKey: ['crm', 'appointments'],
-    queryFn: () => apiJson<CrmAppointment[]>('/crm/appointments'),
+    queryKey: ['crm', 'appointments', appointmentsPage],
+    queryFn: () =>
+      apiJson<Paginated<CrmAppointment>>(`/crm/appointments?${paginatedQuery(appointmentsPage, 50)}`),
     staleTime: 20_000,
+    placeholderData: keepPreviousData,
     enabled: isMaster || tab === 'appointments',
   });
 
+  const appointmentItems = appointmentsQ.data?.items ?? [];
+
   const expectedAppointments = React.useMemo(() => {
     const now = Date.now();
-    return (appointmentsQ.data ?? []).filter((a) => new Date(a.startsAt).getTime() >= now);
-  }, [appointmentsQ.data]);
+    return appointmentItems.filter((a) => new Date(a.startsAt).getTime() >= now);
+  }, [appointmentItems]);
 
   const intervalsQ = useQuery({
-    queryKey: ['crm', 'intervals', dIntervalQ],
-    queryFn: () => apiJson<CrmIntervalRow[]>(`/crm/intervals?q=${encodeURIComponent(dIntervalQ)}`),
+    queryKey: ['crm', 'intervals', dIntervalQ, intervalsPage],
+    queryFn: () =>
+      apiJson<Paginated<CrmIntervalRow>>(
+        `/crm/intervals?q=${encodeURIComponent(dIntervalQ)}&${paginatedQuery(intervalsPage, 50)}`,
+      ),
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     enabled: !isMaster && tab === 'intervals',
   });
 
   const repeatQ = useQuery({
-    queryKey: ['crm', 'repeat-needed'],
-    queryFn: () => apiJson<CrmIntervalRow[]>('/crm/repeat-needed'),
+    queryKey: ['crm', 'repeat-needed', repeatPage],
+    queryFn: () =>
+      apiJson<Paginated<CrmIntervalRow>>(`/crm/repeat-needed?${paginatedQuery(repeatPage, 50)}`),
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     enabled: !isMaster && tab === 'repeat',
   });
 
   const lostQ = useQuery({
-    queryKey: ['crm', 'lost'],
-    queryFn: () => apiJson<CrmClient[]>('/crm/lost?days=90'),
+    queryKey: ['crm', 'lost', lostPage],
+    queryFn: () =>
+      apiJson<Paginated<CrmClient>>(`/crm/lost?days=90&${paginatedQuery(lostPage, 50)}`),
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     enabled: !isMaster && tab === 'lost',
   });
 
   const unifiedClientsQ = useQuery({
-    queryKey: ['insights', 'clients-unified', unifiedSearch],
+    queryKey: ['insights', 'clients-unified', unifiedSearch, unifiedPage],
     queryFn: () =>
-      apiJson<Array<{
-        id: string;
-        fullName: string;
-        phone: string;
-        crmStatus: CrmClientStatus | null;
-        visitsCount: number;
-        loyalty: { id: string; stamps: number; giftAvailable: boolean } | null;
-      }>>(`/insights/clients/unified?q=${encodeURIComponent(unifiedSearch)}`),
+      apiJson<
+        Paginated<{
+          id: string;
+          fullName: string;
+          phone: string;
+          crmStatus: CrmClientStatus | null;
+          visitsCount: number;
+          loyalty: { id: string; stamps: number; giftAvailable: boolean } | null;
+        }>
+      >(`/insights/clients/unified?q=${encodeURIComponent(unifiedSearch)}&${paginatedQuery(unifiedPage, 50)}`),
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     enabled: !isMaster && tab === 'unified',
   });
 
@@ -190,9 +253,14 @@ export default function CrmPage() {
     enabled: !isMaster && tab === 'analytics',
   });
 
-  const invalidateCrm = () =>
+  const invalidateCrmLists = () =>
     Promise.all([
-      qc.invalidateQueries({ queryKey: ['crm'] }),
+      qc.invalidateQueries({ queryKey: ['crm', 'clients'] }),
+      qc.invalidateQueries({ queryKey: ['crm', 'appointments'] }),
+      qc.invalidateQueries({ queryKey: ['crm', 'intervals'] }),
+      qc.invalidateQueries({ queryKey: ['crm', 'repeat-needed'] }),
+      qc.invalidateQueries({ queryKey: ['crm', 'lost'] }),
+      qc.invalidateQueries({ queryKey: ['crm', 'schedule'] }),
       qc.invalidateQueries({ queryKey: ['insights', 'clients-unified'] }),
     ]);
 
@@ -201,7 +269,7 @@ export default function CrmPage() {
     onSuccess: async () => {
       setFullName('');
       setPhone('');
-      await invalidateCrm();
+      await invalidateCrmLists();
       toast.success('Клиент добавлен');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
@@ -239,13 +307,13 @@ export default function CrmPage() {
           birthDate: birthDate === '' ? null : birthDate,
         }),
       }),
-    onSuccess: invalidateCrm,
+    onSuccess: invalidateCrmLists,
   });
 
   const deleteClientMu = useMutation({
     mutationFn: (id: string) => apiJson(`/crm/clients/${id}`, { method: 'DELETE' }),
     onSuccess: async () => {
-      await invalidateCrm();
+      await invalidateCrmLists();
       toast.success('Клиент удалён');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
@@ -264,7 +332,7 @@ export default function CrmPage() {
       forceInterval?: boolean;
     }) => apiJson<{ loyaltyCreated?: boolean }>('/crm/appointments', { method: 'POST', body: JSON.stringify(payload) }),
     onSuccess: async (res) => {
-      await invalidateCrm();
+      await invalidateCrmLists();
       toast.success(res.loyaltyCreated ? 'Запись создана · клиент добавлен в лояльность' : 'Запись создана');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
@@ -273,7 +341,7 @@ export default function CrmPage() {
   const setVisitStatusMu = useMutation({
     mutationFn: ({ id, visitStatus }: { id: string; visitStatus: CrmVisitStatus }) =>
       apiJson(`/crm/appointments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ visitStatus }) }),
-    onSuccess: invalidateCrm,
+    onSuccess: invalidateCrmLists,
   });
 
   const patchAppointmentMu = useMutation({
@@ -290,7 +358,7 @@ export default function CrmPage() {
         }),
       }),
     onSuccess: async () => {
-      await invalidateCrm();
+      await invalidateCrmLists();
       setEditingAppointment(null);
       toast.success('Запись обновлена');
     },
@@ -300,7 +368,7 @@ export default function CrmPage() {
   const deleteAppointmentMu = useMutation({
     mutationFn: (id: string) => apiJson(`/crm/appointments/${id}/delete`, { method: 'POST' }),
     onSuccess: async () => {
-      await invalidateCrm();
+      await invalidateCrmLists();
       toast.success('Запись удалена');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
@@ -348,7 +416,7 @@ export default function CrmPage() {
         }),
       }),
     onSuccess: async () => {
-      await invalidateCrm();
+      await invalidateCrmLists();
       toast.success('Процедура добавлена');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Ошибка'),
@@ -356,7 +424,7 @@ export default function CrmPage() {
 
   const clientVisitGroups = React.useMemo(() => {
     const map = new Map<string, { client: VisitClient; appointments: VisitAppointment[] }>();
-    for (const a of appointmentsQ.data ?? []) {
+    for (const a of appointmentItems) {
       const client: VisitClient = {
         id: a.client.id,
         fullName: a.client.fullName,
@@ -397,7 +465,7 @@ export default function CrmPage() {
           new Date(a.appointments[0]?.startsAt ?? 0).getTime() -
           new Date(b.appointments[0]?.startsAt ?? 0).getTime(),
       );
-  }, [appointmentsQ.data]);
+  }, [appointmentItems]);
 
   const saveClientProfile = (payload: ClientEditPayload) => {
     patchClientMu.mutate(
@@ -523,7 +591,7 @@ export default function CrmPage() {
               <div className="mt-3 space-y-3">
                 {clientsQ.isLoading ?
                   <Skeleton className="h-40" />
-                : (clientsQ.data ?? []).map((c) => (
+                : (clientsQ.data?.items ?? []).map((c) => (
                     <ClientCard
                       key={c.id}
                       client={c}
@@ -539,6 +607,14 @@ export default function CrmPage() {
                     />
                   ))}
               </div>
+              {clientsQ.data ?
+                <PaginationBar
+                  page={clientsQ.data.page}
+                  pages={clientsQ.data.pages}
+                  total={clientsQ.data.total}
+                  onPage={setClientsPage}
+                />
+              : null}
             </Card>
           </TabsContent>
 
@@ -610,6 +686,14 @@ export default function CrmPage() {
                     />
                   ))}
               </div>
+              {appointmentsQ.data ?
+                <PaginationBar
+                  page={appointmentsQ.data.page}
+                  pages={appointmentsQ.data.pages}
+                  total={appointmentsQ.data.total}
+                  onPage={setAppointmentsPage}
+                />
+              : null}
             </Card>
           </TabsContent>
 
@@ -618,7 +702,7 @@ export default function CrmPage() {
               <CardHeader title="CRM + Лояльность" />
               <Input placeholder="Поиск по ФИО" value={unifiedSearch} onChange={(e) => setUnifiedSearch(e.target.value)} />
               <div className="mt-3 space-y-2">
-                {(unifiedClientsQ.data ?? []).map((c) => (
+                {(unifiedClientsQ.data?.items ?? []).map((c) => (
                   <div key={c.id} className="rounded-xl border p-4">
                     <div className="font-semibold">{c.fullName}</div>
                     <div className="mt-1 text-sm text-muted">
@@ -628,6 +712,14 @@ export default function CrmPage() {
                   </div>
                 ))}
               </div>
+              {unifiedClientsQ.data ?
+                <PaginationBar
+                  page={unifiedClientsQ.data.page}
+                  pages={unifiedClientsQ.data.pages}
+                  total={unifiedClientsQ.data.total}
+                  onPage={setUnifiedPage}
+                />
+              : null}
             </Card>
           </TabsContent>
 
@@ -636,7 +728,7 @@ export default function CrmPage() {
               <CardHeader title="Контроль интервалов" description="Мин. 25 дн. (1–3 процедура), мин. 35 дн. (с 4-й)." />
               <Input placeholder="ФИО" value={intervalQ} onChange={(e) => setIntervalQ(e.target.value)} />
               <div className="mt-3 space-y-3">
-                {(intervalsQ.data ?? []).map((row) => (
+                {(intervalsQ.data?.items ?? []).map((row) => (
                   <div key={row.id} className="rounded-xl border p-4">
                     <div className="flex justify-between gap-2">
                       <div className="font-semibold">{row.fullName}</div>
@@ -650,6 +742,14 @@ export default function CrmPage() {
                   </div>
                 ))}
               </div>
+              {intervalsQ.data ?
+                <PaginationBar
+                  page={intervalsQ.data.page}
+                  pages={intervalsQ.data.pages}
+                  total={intervalsQ.data.total}
+                  onPage={setIntervalsPage}
+                />
+              : null}
             </Card>
           </TabsContent>
 
@@ -657,13 +757,21 @@ export default function CrmPage() {
             <Card>
               <CardHeader title="Повторный контакт" />
               <div className="space-y-2">
-                {(repeatQ.data ?? []).map((c) => (
+                {(repeatQ.data?.items ?? []).map((c) => (
                   <div key={c.id} className="rounded-xl border p-3">
                     <div className="font-semibold">{c.fullName}</div>
                     <div className="text-sm text-muted">{c.recommendedNextAt ?? '—'}</div>
                   </div>
                 ))}
               </div>
+              {repeatQ.data ?
+                <PaginationBar
+                  page={repeatQ.data.page}
+                  pages={repeatQ.data.pages}
+                  total={repeatQ.data.total}
+                  onPage={setRepeatPage}
+                />
+              : null}
             </Card>
           </TabsContent>
 
@@ -671,13 +779,21 @@ export default function CrmPage() {
             <Card>
               <CardHeader title="Потерянные" />
               <div className="space-y-2">
-                {(lostQ.data ?? []).map((c) => (
+                {(lostQ.data?.items ?? []).map((c) => (
                   <div key={c.id} className="rounded-xl border p-3">
                     <div className="font-semibold">{c.fullName}</div>
                     <div className="text-sm text-muted">Последняя: {c.lastProcedureAt?.slice(0, 10) ?? '—'}</div>
                   </div>
                 ))}
               </div>
+              {lostQ.data ?
+                <PaginationBar
+                  page={lostQ.data.page}
+                  pages={lostQ.data.pages}
+                  total={lostQ.data.total}
+                  onPage={setLostPage}
+                />
+              : null}
             </Card>
           </TabsContent>
 

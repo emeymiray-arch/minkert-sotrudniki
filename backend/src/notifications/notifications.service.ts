@@ -50,15 +50,9 @@ export class NotificationsService {
   }
 
   private async pushToRoles(roles: UserRole[], title: string, body: string) {
-    const users = await this.prisma.user.findMany({
-      where: { role: { in: roles } },
-      select: { id: true },
+    const subs = await this.prisma.pushSubscription.findMany({
+      where: { user: { role: { in: roles } } },
     });
-    await Promise.all(users.map((u) => this.pushToUser(u.id, title, body)));
-  }
-
-  private async pushToUser(userId: string, title: string, body: string) {
-    const subs = await this.prisma.pushSubscription.findMany({ where: { userId } });
     await Promise.all(
       subs.map(async (sub) => {
         try {
@@ -68,7 +62,7 @@ export class NotificationsService {
           if (code === 404 || code === 410) {
             await this.prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => undefined);
           } else {
-            this.logger.warn(`Push failed for ${userId}: ${String(err)}`);
+            this.logger.warn(`Push failed for ${sub.userId}: ${String(err)}`);
           }
         }
       }),
@@ -82,13 +76,15 @@ export class NotificationsService {
     body: string,
     payload?: Record<string, unknown>,
   ) {
-    await Promise.all(
-      roles.map((roleTarget) =>
-        this.prisma.appNotification.create({
-          data: { roleTarget, kind, title, body, payload: payload as object | undefined },
-        }),
-      ),
-    );
+    await this.prisma.appNotification.createMany({
+      data: roles.map((roleTarget) => ({
+        roleTarget,
+        kind,
+        title,
+        body,
+        payload: payload as object | undefined,
+      })),
+    });
     void this.pushToRoles(roles, title, body);
   }
 
@@ -164,21 +160,31 @@ export class NotificationsService {
       },
       include: { client: { select: { fullName: true } }, master: { select: { name: true } } },
     });
+    if (!appointments.length) return;
+
+    const kinds = REMINDER_MINUTES.map((m) => `reminder.${m}m`);
+    const recent = await this.prisma.appNotification.findMany({
+      where: {
+        kind: { in: kinds },
+        roleTarget: UserRole.ADMIN,
+        createdAt: { gte: new Date(now - 15 * 60_000) },
+      },
+      select: { kind: true, payload: true },
+    });
+    const sent = new Set(
+      recent.map((n) => {
+        const p = n.payload as { appointmentId?: string; minutes?: number } | null;
+        return `${p?.appointmentId ?? ''}:${n.kind}`;
+      }),
+    );
 
     for (const appt of appointments) {
       const diffMin = Math.round((appt.startsAt.getTime() - now) / 60_000);
       for (const target of REMINDER_MINUTES) {
         if (diffMin > target || diffMin < target - 2) continue;
         const kind = `reminder.${target}m`;
-        const exists = await this.prisma.appNotification.findFirst({
-          where: {
-            kind,
-            roleTarget: UserRole.ADMIN,
-            payload: { path: ['appointmentId'], equals: appt.id },
-            createdAt: { gte: new Date(now - 15 * 60_000) },
-          },
-        });
-        if (exists) continue;
+        const key = `${appt.id}:${kind}`;
+        if (sent.has(key)) continue;
 
         const label =
           target === 120 ? '2 часа'
@@ -193,6 +199,7 @@ export class NotificationsService {
           `Позвоните клиентке ${appt.client.fullName}: процедура через ${label}. Мастер: ${appt.master?.name ?? '—'}.`,
           { appointmentId: appt.id, minutes: target },
         );
+        sent.add(key);
       }
     }
   }
