@@ -1,4 +1,14 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -33,7 +43,15 @@ export class CrmController {
 
   @Post('masters')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
-  createMaster(@Body() body: { name: string; phone?: string; specialty?: string; salonId?: string }) {
+  createMaster(
+    @Body()
+    body: {
+      name: string;
+      phone?: string;
+      specialty?: string;
+      salonId?: string;
+    },
+  ) {
     return this.crm.createMaster(body);
   }
 
@@ -42,7 +60,14 @@ export class CrmController {
   patchMaster(
     @Param('id') id: string,
     @Body()
-    body: Partial<{ name: string; phone: string; specialty: string; salonId: string; active: boolean; sortOrder: number }>,
+    body: Partial<{
+      name: string;
+      phone: string;
+      specialty: string;
+      salonId: string;
+      active: boolean;
+      sortOrder: number;
+    }>,
   ) {
     return this.crm.updateMaster(id, body);
   }
@@ -56,7 +81,8 @@ export class CrmController {
   @Get('schedule')
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER)
   schedule(@Query('date') date: string, @Query('salonId') salonId?: string) {
-    if (!date?.trim()) throw new BadRequestException('date обязателен (YYYY-MM-DD)');
+    if (!date?.trim())
+      throw new BadRequestException('date обязателен (YYYY-MM-DD)');
     return this.crm.getSchedule(date.trim(), salonId);
   }
 
@@ -71,7 +97,12 @@ export class CrmController {
       throw new BadRequestException('masterId и startsAt обязательны');
     }
     const dur = durationMinutes ? Number(durationMinutes) : undefined;
-    return this.crm.checkMasterSlot(masterId.trim(), startsAt, dur, excludeAppointmentId?.trim());
+    return this.crm.checkMasterSlot(
+      masterId.trim(),
+      startsAt,
+      dur,
+      excludeAppointmentId?.trim(),
+    );
   }
 
   @Get('clients')
@@ -101,7 +132,13 @@ export class CrmController {
   @Post('clients')
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   createClient(
-    @Body() body: { fullName: string; phone?: string; birthDate?: string; note?: string },
+    @Body()
+    body: {
+      fullName: string;
+      phone?: string;
+      birthDate?: string;
+      note?: string;
+    },
   ) {
     return this.crm.createClient(body);
   }

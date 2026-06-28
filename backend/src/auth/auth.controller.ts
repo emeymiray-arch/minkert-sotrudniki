@@ -1,13 +1,11 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { UserRole } from '@prisma/client';
-import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
-import { JwtUserPayload } from './types/jwt-user';
 import { AuthService } from './auth.service';
 
 @Controller('auth')
@@ -55,7 +53,7 @@ export class AuthController {
 
   @Post('accounts')
   @Roles(UserRole.ADMIN)
-  createAccount(@Body() dto: RegisterDto, @CurrentUser() _user: JwtUserPayload) {
+  createAccount(@Body() dto: RegisterDto) {
     const role = dto.role ?? UserRole.VIEWER;
     return this.auth.registerAdmin({
       email: dto.email,

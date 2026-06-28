@@ -7,7 +7,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
 describe('AuthService', () => {
-  const users: jest.Mocked<Pick<UsersService, 'findByEmail' | 'countUsers' | 'registerUser'>> = {
+  const users: jest.Mocked<
+    Pick<UsersService, 'findByEmail' | 'countUsers' | 'registerUser'>
+  > = {
     findByEmail: jest.fn(),
     countUsers: jest.fn(),
     registerUser: jest.fn(),
@@ -22,9 +24,13 @@ describe('AuthService', () => {
     },
   } as unknown as PrismaService;
 
-  const jwt = { sign: jest.fn().mockReturnValue('access-token') } as unknown as JwtService;
+  const jwt = {
+    sign: jest.fn().mockReturnValue('access-token'),
+  } as unknown as JwtService;
   const config = {
-    get: jest.fn((key: string) => (key === 'JWT_ACCESS_EXPIRES_SECONDS' ? '3600' : '14')),
+    get: jest.fn((key: string) =>
+      key === 'JWT_ACCESS_EXPIRES_SECONDS' ? '3600' : '14',
+    ),
     getOrThrow: jest.fn().mockReturnValue('test-secret'),
   } as unknown as ConfigService;
 
@@ -32,7 +38,12 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AuthService(prisma, users as unknown as UsersService, jwt, config);
+    service = new AuthService(
+      prisma,
+      users as unknown as UsersService,
+      jwt,
+      config,
+    );
   });
 
   describe('registerBootstrap', () => {
@@ -43,7 +54,11 @@ describe('AuthService', () => {
       delete process.env.ALLOW_BOOTSTRAP;
 
       await expect(
-        service.registerBootstrap({ email: 'a@b.c', password: 'x', name: 'Test' }),
+        service.registerBootstrap({
+          email: 'a@b.c',
+          password: 'x',
+          name: 'Test',
+        }),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       process.env.NODE_ENV = prev;
@@ -64,7 +79,9 @@ describe('AuthService', () => {
         createdAt: new Date(),
       } as never);
 
-      await expect(service.login('a@b.c', 'wrong')).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.login('a@b.c', 'wrong')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 });

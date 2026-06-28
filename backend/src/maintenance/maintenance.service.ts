@@ -18,7 +18,10 @@ export class MaintenanceService {
     try {
       await this.notifications.scanAppointmentReminders();
     } catch (err) {
-      this.logger.error('scanAppointmentReminders failed', err instanceof Error ? err.stack : err);
+      this.logger.error(
+        'scanAppointmentReminders failed',
+        err instanceof Error ? err.stack : err,
+      );
     }
   }
 
@@ -33,7 +36,10 @@ export class MaintenanceService {
         this.logger.log(`Удалено просроченных refresh-токенов: ${res.count}`);
       }
     } catch (err) {
-      this.logger.error('purgeExpiredRefreshTokens failed', err instanceof Error ? err.stack : err);
+      this.logger.error(
+        'purgeExpiredRefreshTokens failed',
+        err instanceof Error ? err.stack : err,
+      );
     }
   }
 }

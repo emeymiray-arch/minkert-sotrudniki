@@ -11,10 +11,9 @@ services:
     region: frankfurt
     rootDir: backend
     plan: starter
-    # Миграции НЕ запускаются автоматически — только добавление индексов, но применяйте вручную
-    # после бэкапа (см. scripts/apply-safe-indexes.sql). Код работает и без индексов.
+    # Миграции применяются автоматически при старте (scripts/start-production.sh)
     buildCommand: npm ci && npx prisma generate && npm run build
-    startCommand: npm run start:prod
+    startCommand: sh scripts/start-production.sh
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION

@@ -8,6 +8,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=backup-paths.sh
+source "$ROOT/scripts/backup-paths.sh"
+migrate_legacy_backups
+ensure_backup_dir
+BACKUP_DIR="$(backup_root)"
 BACKUP_LABEL="com.minkert.neon-backup"
 RESTORE_LABEL="com.minkert.neon-restore-test"
 BACKUP_PLIST="$HOME/Library/LaunchAgents/${BACKUP_LABEL}.plist"
@@ -52,7 +57,7 @@ chmod +x \
   "$ROOT/scripts/test-neon-restore.sh" \
   "$RESTORE_RUNNER"
 
-mkdir -p "$HOME/Library/LaunchAgents" "$ROOT/backups"
+mkdir -p "$HOME/Library/LaunchAgents" "$BACKUP_DIR"
 
 cat >"$BACKUP_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -71,9 +76,9 @@ cat >"$BACKUP_PLIST" <<EOF
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${ROOT}/backups/launchd-backup-stdout.log</string>
+  <string>${BACKUP_DIR}/launchd-backup-stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>${ROOT}/backups/launchd-backup-stderr.log</string>
+  <string>${BACKUP_DIR}/launchd-backup-stderr.log</string>
 </dict>
 </plist>
 EOF
@@ -102,9 +107,9 @@ cat >"$RESTORE_PLIST" <<EOF
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${ROOT}/backups/launchd-restore-stdout.log</string>
+  <string>${BACKUP_DIR}/launchd-restore-stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>${ROOT}/backups/launchd-restore-stderr.log</string>
+  <string>${BACKUP_DIR}/launchd-restore-stderr.log</string>
 </dict>
 </plist>
 EOF
@@ -121,12 +126,12 @@ launchctl enable "$domain/${RESTORE_LABEL}" 2>/dev/null || true
 echo "Расписание установлено."
 echo ""
 echo "Бэкап Neon:"
-echo "  Каждые $((INTERVAL_SECONDS / 86400)) дн., все копии в backups/minkert-neon-*.dump"
-echo "  Лог: $ROOT/backups/neon-backup.log"
+echo "  Каждые $((INTERVAL_SECONDS / 86400)) дн., все копии в $BACKUP_DIR/"
+echo "  Лог: $BACKUP_DIR/neon-backup.log"
 echo ""
 echo "Проверка восстановления:"
 echo "  Каждый понедельник в $(printf '%02d:%02d' "$RESTORE_HOUR" "$RESTORE_MINUTE"), первая — сейчас"
-echo "  Лог: $ROOT/backups/restore-test.log"
+echo "  Лог: $BACKUP_DIR/restore-test.log"
 echo "  Тестовая БД: minkert_restore_test (локальный Postgres)"
 echo ""
 echo "Проверка:"

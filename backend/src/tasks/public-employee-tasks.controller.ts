@@ -10,10 +10,7 @@ export class PublicEmployeeTasksController {
 
   @Public()
   @Get(':token')
-  week(
-    @Param('token') token: string,
-    @Query('date') date?: string,
-  ) {
+  week(@Param('token') token: string, @Query('date') date?: string) {
     const d = date?.trim() || new Date().toISOString().slice(0, 10);
     return this.tasks.listPublicWeekByToken(token, d);
   }
@@ -26,6 +23,11 @@ export class PublicEmployeeTasksController {
     @Param('taskId') taskId: string,
     @Body() dto: PatchPublicTaskDayDto,
   ) {
-    return this.tasks.patchPublicTaskDayByToken(token, taskId, dto.date, dto.score);
+    return this.tasks.patchPublicTaskDayByToken(
+      token,
+      taskId,
+      dto.date,
+      dto.score,
+    );
   }
 }

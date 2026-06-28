@@ -7,9 +7,27 @@ export const OPS_DEFAULT_BLOCKS: Array<{
   timeEnd: string;
   sortOrder: number;
 }> = [
-  { block: OpsTimeBlock.MORNING, title: 'Утро', timeStart: '08:00', timeEnd: '12:00', sortOrder: 0 },
-  { block: OpsTimeBlock.DAY, title: 'День', timeStart: '12:00', timeEnd: '18:00', sortOrder: 1 },
-  { block: OpsTimeBlock.EVENING, title: 'Вечер', timeStart: '18:00', timeEnd: '22:00', sortOrder: 2 },
+  {
+    block: OpsTimeBlock.MORNING,
+    title: 'Утро',
+    timeStart: '08:00',
+    timeEnd: '12:00',
+    sortOrder: 0,
+  },
+  {
+    block: OpsTimeBlock.DAY,
+    title: 'День',
+    timeStart: '12:00',
+    timeEnd: '18:00',
+    sortOrder: 1,
+  },
+  {
+    block: OpsTimeBlock.EVENING,
+    title: 'Вечер',
+    timeStart: '18:00',
+    timeEnd: '22:00',
+    sortOrder: 2,
+  },
   {
     block: OpsTimeBlock.NEXT_DAY,
     title: 'Следующий день',
@@ -17,7 +35,13 @@ export const OPS_DEFAULT_BLOCKS: Array<{
     timeEnd: '23:59',
     sortOrder: 3,
   },
-  { block: OpsTimeBlock.WEEK, title: 'Неделя', timeStart: '00:00', timeEnd: '23:59', sortOrder: 4 },
+  {
+    block: OpsTimeBlock.WEEK,
+    title: 'Неделя',
+    timeStart: '00:00',
+    timeEnd: '23:59',
+    sortOrder: 4,
+  },
 ];
 
 /** Метки категории у задачи (только сортировка, без UI-секций). */

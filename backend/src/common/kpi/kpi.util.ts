@@ -36,7 +36,10 @@ export function taskWeekRawScore(task: TaskDayValues): number {
 }
 
 /** Серия недель подряд, где недельная эффективность >= порога */
-export function weeklyStreak(weeklyPercentsDescendingNewestFirst: number[], threshold = 78): number {
+export function weeklyStreak(
+  weeklyPercentsDescendingNewestFirst: number[],
+  threshold = 78,
+): number {
   let streak = 0;
   for (const w of weeklyPercentsDescendingNewestFirst) {
     if (w >= threshold) streak += 1;

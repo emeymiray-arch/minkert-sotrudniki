@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { EmployeeStatus, OpsTaskStatus, OpsTimeBlock, Task } from '@prisma/client';
+import {
+  EmployeeStatus,
+  OpsTaskStatus,
+  OpsTimeBlock,
+  Task,
+} from '@prisma/client';
 import { utcDateToWeekDayDb, WEEK_DAYS_DB } from '../common/constants/days';
 import {
   TaskDayValues,
@@ -7,18 +12,35 @@ import {
   taskWeekEfficiencyPercent,
   weeklyStreak,
 } from '../common/kpi/kpi.util';
-import { addUtcDays, endUtcMonth, startUtcMonth, startUtcWeekMonday } from '../common/date/week';
+import {
+  addUtcDays,
+  endUtcMonth,
+  startUtcMonth,
+  startUtcWeekMonday,
+} from '../common/date/week';
 import { PrismaService } from '../prisma/prisma.service';
 
 type TaskWeekRow = Pick<
   Task,
-  'employeeId' | 'taskDate' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+  | 'employeeId'
+  | 'taskDate'
+  | 'mon'
+  | 'tue'
+  | 'wed'
+  | 'thu'
+  | 'fri'
+  | 'sat'
+  | 'sun'
 >;
 
 export interface SnapshotWeek {
   weekStart: Date;
   weeklyEfficiency: number;
-  dailyBreakdown: { key: typeof WEEK_DAYS_DB[number]; label: string; efficiency: number }[];
+  dailyBreakdown: {
+    key: (typeof WEEK_DAYS_DB)[number];
+    label: string;
+    efficiency: number;
+  }[];
 }
 
 @Injectable()
@@ -55,7 +77,9 @@ export class AnalyticsService {
     }
     const weekly = rows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r)));
     const dailyBreakdown = WEEK_DAYS_DB.map((col, idx) => {
-      const nums = rows.map((r) => percentForStatus((r as never)[col] as number));
+      const nums = rows.map((r) =>
+        percentForStatus((r as never)[col] as number),
+      );
       return {
         key: col,
         label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
@@ -96,7 +120,9 @@ export class AnalyticsService {
     for (const id of employeeIds) {
       map[id] = {
         weeklyEfficiency: 0,
-        dailyKpiByDay: Object.fromEntries(WEEK_DAYS_DB.map((k) => [k, 0])) as Record<string, number>,
+        dailyKpiByDay: Object.fromEntries(
+          WEEK_DAYS_DB.map((k) => [k, 0]),
+        ) as Record<string, number>,
       };
     }
     const byEmp = new Map<string, TaskWeekRow[]>();
@@ -139,12 +165,25 @@ export class AnalyticsService {
         sun: true,
       },
     });
-    return this.employeeRangeAnalyticsFromRows(employeeId, rows as TaskWeekRow[], from, to);
+    return this.employeeRangeAnalyticsFromRows(
+      employeeId,
+      rows as TaskWeekRow[],
+      from,
+      to,
+    );
   }
 
-  async batchEmployeeRangeAnalytics(employeeIds: string[], from: Date, to: Date) {
+  async batchEmployeeRangeAnalytics(
+    employeeIds: string[],
+    from: Date,
+    to: Date,
+  ) {
     const unique = [...new Set(employeeIds.filter(Boolean))];
-    if (!unique.length) return {} as Record<string, Awaited<ReturnType<AnalyticsService['employeeRangeAnalytics']>>>;
+    if (!unique.length)
+      return {} as Record<
+        string,
+        Awaited<ReturnType<AnalyticsService['employeeRangeAnalytics']>>
+      >;
 
     const rows = await this.prisma.task.findMany({
       where: { employeeId: { in: unique }, taskDate: { gte: from, lte: to } },
@@ -168,7 +207,10 @@ export class AnalyticsService {
       byEmp.get(r.employeeId)?.push(r);
     }
 
-    const out: Record<string, Awaited<ReturnType<AnalyticsService['employeeRangeAnalytics']>>> = {};
+    const out: Record<
+      string,
+      Awaited<ReturnType<AnalyticsService['employeeRangeAnalytics']>>
+    > = {};
     for (const [id, empRows] of byEmp) {
       out[id] = this.employeeRangeAnalyticsFromRows(id, empRows, from, to);
     }
@@ -196,9 +238,13 @@ export class AnalyticsService {
     });
     const monthStart = startUtcMonth(to);
     const monthEnd = endUtcMonth(to);
-    const monthRows = rows.filter((r) => r.taskDate >= monthStart && r.taskDate <= monthEnd);
+    const monthRows = rows.filter(
+      (r) => r.taskDate >= monthStart && r.taskDate <= monthEnd,
+    );
     const monthlyEfficiency = monthRows.length
-      ? this.avg(monthRows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r))))
+      ? this.avg(
+          monthRows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r))),
+        )
       : 0;
 
     let growth = 0;
@@ -210,10 +256,18 @@ export class AnalyticsService {
       else decline = -diff;
     }
 
-    const weeklyPercentsDescending = [...series.map((w) => w.weeklyEfficiency)].reverse();
+    const weeklyPercentsDescending = [
+      ...series.map((w) => w.weeklyEfficiency),
+    ].reverse();
     const dailyOverall = WEEK_DAYS_DB.map((col, idx) => {
-      const nums = rows.map((r) => percentForStatus((r as never)[col] as number));
-      return { key: col, label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx], efficiency: this.avg(nums) };
+      const nums = rows.map((r) =>
+        percentForStatus((r as never)[col] as number),
+      );
+      return {
+        key: col,
+        label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
+        efficiency: this.avg(nums),
+      };
     });
 
     return {
@@ -222,9 +276,12 @@ export class AnalyticsService {
       growthPercent: Number(growth.toFixed(2)),
       declinePercent: Number(decline.toFixed(2)),
       monthlyEfficiency: Number(monthlyEfficiency.toFixed(2)),
-      periodEfficiency:
-        rows.length ?
-          Number(this.avg(rows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r)))).toFixed(2))
+      periodEfficiency: rows.length
+        ? Number(
+            this.avg(
+              rows.map((r) => taskWeekEfficiencyPercent(this.taskVals(r))),
+            ).toFixed(2),
+          )
         : 0,
       dailyHeatByWeekday: dailyOverall,
     };
@@ -245,8 +302,13 @@ export class AnalyticsService {
       }))
       .sort((a, b) => b.weeklyEfficiency - a.weeklyEfficiency);
     const best = leaderboard.slice(0, 5);
-    const worst = leaderboard.filter((x) => x.weeklyEfficiency > 0).slice(-5).reverse();
-    const teamAvgEfficiency = leaderboard.length ? this.avg(leaderboard.map((x) => x.weeklyEfficiency)) : 0;
+    const worst = leaderboard
+      .filter((x) => x.weeklyEfficiency > 0)
+      .slice(-5)
+      .reverse();
+    const teamAvgEfficiency = leaderboard.length
+      ? this.avg(leaderboard.map((x) => x.weeklyEfficiency))
+      : 0;
 
     const weekEnd = addUtcDays(anchor, 6);
     /* Задачи с низкой готовностью в выбранной неделе */
@@ -264,7 +326,9 @@ export class AnalyticsService {
         id: t.id,
         employeeName: t.employee.name,
         title: t.title,
-        weeklyEfficiency: Number(taskWeekEfficiencyPercent(this.taskVals(t)).toFixed(2)),
+        weeklyEfficiency: Number(
+          taskWeekEfficiencyPercent(this.taskVals(t)).toFixed(2),
+        ),
       }))
       .sort((a, b) => a.weeklyEfficiency - b.weeklyEfficiency)
       .slice(0, 12);
@@ -293,7 +357,9 @@ export class AnalyticsService {
    * Периоды считаются автоматически: сегодня, текущая неделя, текущий месяц.
    */
   async managerKpiSummary(asOf = new Date()) {
-    const today = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+    const today = new Date(
+      Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()),
+    );
     const weekMonday = startUtcWeekMonday(today);
     const weekEnd = addUtcDays(weekMonday, 6);
     const monthStart = startUtcMonth(today);
@@ -317,17 +383,23 @@ export class AnalyticsService {
       sun: true,
     } as const;
 
-    const weekTasks =
-      ids.length ?
-        await this.prisma.task.findMany({
-          where: { employeeId: { in: ids }, taskDate: { gte: weekMonday, lte: weekEnd } },
+    const weekTasks = ids.length
+      ? await this.prisma.task.findMany({
+          where: {
+            employeeId: { in: ids },
+            taskDate: { gte: weekMonday, lte: weekEnd },
+          },
           select: taskSelect,
         })
       : [];
 
     const todayCol = utcDateToWeekDayDb(today);
     const dailyKpi = weekTasks.length
-      ? this.avg(weekTasks.map((t) => percentForStatus((t as never)[todayCol] as number)))
+      ? this.avg(
+          weekTasks.map((t) =>
+            percentForStatus((t as never)[todayCol] as number),
+          ),
+        )
       : 0;
 
     const snapMap = await this.snapshotsForEmployees(ids, weekMonday);
@@ -336,25 +408,39 @@ export class AnalyticsService {
 
     const prevMonday = addUtcDays(weekMonday, -7);
     const prevSnap = await this.snapshotsForEmployees(ids, prevMonday);
-    const prevWeekly = ids.length ? this.avg(ids.map((id) => prevSnap[id]?.weeklyEfficiency ?? 0)) : 0;
+    const prevWeekly = ids.length
+      ? this.avg(ids.map((id) => prevSnap[id]?.weeklyEfficiency ?? 0))
+      : 0;
     const weekOverWeekTrend = Number((weeklyKpi - prevWeekly).toFixed(2));
 
-    const monthTasks =
-      ids.length ?
-        await this.prisma.task.findMany({
-          where: { employeeId: { in: ids }, taskDate: { gte: monthStart, lte: monthEnd } },
+    const monthTasks = ids.length
+      ? await this.prisma.task.findMany({
+          where: {
+            employeeId: { in: ids },
+            taskDate: { gte: monthStart, lte: monthEnd },
+          },
           select: taskSelect,
         })
       : [];
     const monthlyKpi = monthTasks.length
-      ? this.avg(monthTasks.map((t) => taskWeekEfficiencyPercent(this.taskVals(t as TaskWeekRow))))
+      ? this.avg(
+          monthTasks.map((t) =>
+            taskWeekEfficiencyPercent(this.taskVals(t as TaskWeekRow)),
+          ),
+        )
       : 0;
 
     const weekdayBreakdown = WEEK_DAYS_DB.map((col, idx) => ({
       key: col,
       label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
       efficiency: weekTasks.length
-        ? Number(this.avg(weekTasks.map((t) => percentForStatus((t as never)[col] as number))).toFixed(2))
+        ? Number(
+            this.avg(
+              weekTasks.map((t) =>
+                percentForStatus((t as never)[col] as number),
+              ),
+            ).toFixed(2),
+          )
         : 0,
     }));
 
@@ -362,13 +448,18 @@ export class AnalyticsService {
       where: {
         OR: [
           { recurring: true, block: { not: OpsTimeBlock.WEEK } },
-          { block: OpsTimeBlock.WEEK, forDate: { gte: weekMonday, lte: weekEnd } },
+          {
+            block: OpsTimeBlock.WEEK,
+            forDate: { gte: weekMonday, lte: weekEnd },
+          },
         ],
       },
       select: { status: true },
     });
     const totalOps = weekTasksOps.length;
-    const doneOps = weekTasksOps.filter((t) => t.status === OpsTaskStatus.DONE).length;
+    const doneOps = weekTasksOps.filter(
+      (t) => t.status === OpsTaskStatus.DONE,
+    ).length;
     const managerTasksKpi = totalOps ? (doneOps / totalOps) * 100 : 0;
 
     return {
@@ -440,7 +531,9 @@ export class AnalyticsService {
     return employees.map((e) => {
       const list = byEmp.get(e.id) ?? [];
       const cells = WEEK_DAYS_DB.map((col, idx) => {
-        const nums = list.map((r) => percentForStatus((r as never)[col] as number));
+        const nums = list.map((r) =>
+          percentForStatus((r as never)[col] as number),
+        );
         return {
           key: col,
           label: ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
@@ -463,8 +556,8 @@ export class AnalyticsService {
     return { from, to };
   }
 
-  readonly weekLabels = WEEK_DAYS_DB.map((_, idx) =>
-    ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
+  readonly weekLabels = WEEK_DAYS_DB.map(
+    (_, idx) => ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'][idx],
   );
 
   overviewTaskShare(employeesCount: number, tasksCompletedRatio: number) {

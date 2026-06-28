@@ -6,8 +6,12 @@ export function minIntervalDaysForSequence(sequenceNumber: number): number {
 }
 
 export function daysBetweenUtc(from: Date, to: Date): number {
-  const a = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  const b = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
+  const a = new Date(
+    Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()),
+  );
+  const b = new Date(
+    Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()),
+  );
   return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
 }
 
@@ -36,9 +40,9 @@ export function computeIntervalCompliance(
       daysUntilAllowed: null,
       intervalOk: true,
       message:
-        nextSequenceNumber === 1 ?
-          'Первая процедура — интервал не требуется.'
-        : 'Нет данных о прошлой процедуре.',
+        nextSequenceNumber === 1
+          ? 'Первая процедура — интервал не требуется.'
+          : 'Нет данных о прошлой процедуре.',
     };
   }
 
@@ -47,7 +51,9 @@ export function computeIntervalCompliance(
   const intervalOk = daysSinceLast >= minIntervalDays;
 
   const range =
-    nextSequenceNumber <= 3 ? '25–30 дней (процедуры 1–3)' : 'от 35 дней (с 4-й процедуры)';
+    nextSequenceNumber <= 3
+      ? '25–30 дней (процедуры 1–3)'
+      : 'от 35 дней (с 4-й процедуры)';
 
   return {
     nextSequenceNumber,
@@ -55,9 +61,8 @@ export function computeIntervalCompliance(
     daysSinceLast,
     daysUntilAllowed,
     intervalOk,
-    message:
-      intervalOk ?
-        `Прошло ${daysSinceLast} дн. — можно записывать (минимум ${minIntervalDays} дн., ${range}).`
+    message: intervalOk
+      ? `Прошло ${daysSinceLast} дн. — можно записывать (минимум ${minIntervalDays} дн., ${range}).`
       : `Рано: прошло ${daysSinceLast} дн., нужно минимум ${minIntervalDays} (ещё ${daysUntilAllowed} дн.). ${range}.`,
   };
 }

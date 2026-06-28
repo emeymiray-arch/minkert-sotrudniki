@@ -42,7 +42,9 @@ export class NotificationsService {
 
   async removePushSubscription(userId: string, endpoint?: string) {
     if (endpoint?.trim()) {
-      await this.prisma.pushSubscription.deleteMany({ where: { userId, endpoint: endpoint.trim() } });
+      await this.prisma.pushSubscription.deleteMany({
+        where: { userId, endpoint: endpoint.trim() },
+      });
     } else {
       await this.prisma.pushSubscription.deleteMany({ where: { userId } });
     }
@@ -60,7 +62,9 @@ export class NotificationsService {
         } catch (err) {
           const code = (err as { statusCode?: number })?.statusCode;
           if (code === 404 || code === 410) {
-            await this.prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => undefined);
+            await this.prisma.pushSubscription
+              .delete({ where: { id: sub.id } })
+              .catch(() => undefined);
           } else {
             this.logger.warn(`Push failed for ${sub.userId}: ${String(err)}`);
           }
@@ -88,9 +92,21 @@ export class NotificationsService {
     void this.pushToRoles(roles, title, body);
   }
 
-  async notifyUser(userId: string, kind: string, title: string, body: string, payload?: Record<string, unknown>) {
+  async notifyUser(
+    userId: string,
+    kind: string,
+    title: string,
+    body: string,
+    payload?: Record<string, unknown>,
+  ) {
     await this.prisma.appNotification.create({
-      data: { userId, kind, title, body, payload: payload as object | undefined },
+      data: {
+        userId,
+        kind,
+        title,
+        body,
+        payload: payload as object | undefined,
+      },
     });
   }
 
@@ -111,7 +127,11 @@ export class NotificationsService {
     );
   }
 
-  async appointmentCanceled(payload: { clientName: string; startsAt: string; reason?: string }) {
+  async appointmentCanceled(payload: {
+    clientName: string;
+    startsAt: string;
+    reason?: string;
+  }) {
     const body = `${payload.clientName} · ${new Date(payload.startsAt).toLocaleString('ru-RU')}`;
     await this.notifyRoles(
       [UserRole.ADMIN, UserRole.MANAGER, UserRole.MASTER],
@@ -123,7 +143,9 @@ export class NotificationsService {
   }
 
   async listForUser(userId: string, role: UserRole, since?: string) {
-    const sinceDate = since ? new Date(since) : new Date(Date.now() - 7 * 86_400_000);
+    const sinceDate = since
+      ? new Date(since)
+      : new Date(Date.now() - 7 * 86_400_000);
     return this.prisma.appNotification.findMany({
       where: {
         createdAt: { gte: sinceDate },
@@ -158,7 +180,10 @@ export class NotificationsService {
         startsAt: { gte: new Date(), lte: horizon },
         visitStatus: { in: ['SCHEDULED', 'ARRIVED'] },
       },
-      include: { client: { select: { fullName: true } }, master: { select: { name: true } } },
+      include: {
+        client: { select: { fullName: true } },
+        master: { select: { name: true } },
+      },
     });
     if (!appointments.length) return;
 
@@ -173,7 +198,10 @@ export class NotificationsService {
     });
     const sent = new Set(
       recent.map((n) => {
-        const p = n.payload as { appointmentId?: string; minutes?: number } | null;
+        const p = n.payload as {
+          appointmentId?: string;
+          minutes?: number;
+        } | null;
         return `${p?.appointmentId ?? ''}:${n.kind}`;
       }),
     );
@@ -187,10 +215,13 @@ export class NotificationsService {
         if (sent.has(key)) continue;
 
         const label =
-          target === 120 ? '2 часа'
-          : target === 60 ? '1 час'
-          : target === 30 ? '30 минут'
-          : '10 минут';
+          target === 120
+            ? '2 часа'
+            : target === 60
+              ? '1 час'
+              : target === 30
+                ? '30 минут'
+                : '10 минут';
 
         await this.notifyRoles(
           [UserRole.ADMIN],

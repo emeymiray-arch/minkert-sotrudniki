@@ -1,0 +1,2 @@
+# Опционально: URL API на Render для npm run verify:prod
+# MINKERT_API_URL=https://ваш-сервис.onrender.com

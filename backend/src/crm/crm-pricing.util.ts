@@ -15,13 +15,22 @@ export function calcProcedurePricing(
   let discountPercent = 0;
 
   if (discount.mode === 'percent') {
-    discountPercent = Math.min(100, Math.max(0, Math.round(discount.discountPercent)));
+    discountPercent = Math.min(
+      100,
+      Math.max(0, Math.round(discount.discountPercent)),
+    );
     discountAmount = Math.round((base * discountPercent) / 100);
   } else if (discount.mode === 'amount') {
-    discountAmount = Math.min(base, Math.max(0, Math.round(discount.discountAmount)));
+    discountAmount = Math.min(
+      base,
+      Math.max(0, Math.round(discount.discountAmount)),
+    );
     discountPercent = base > 0 ? Math.round((discountAmount / base) * 100) : 0;
   } else {
-    const finalMain = Math.min(base, Math.max(0, Math.round(discount.finalMainPrice)));
+    const finalMain = Math.min(
+      base,
+      Math.max(0, Math.round(discount.finalMainPrice)),
+    );
     discountAmount = base - finalMain;
     discountPercent = base > 0 ? Math.round((discountAmount / base) * 100) : 0;
   }

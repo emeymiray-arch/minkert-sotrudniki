@@ -65,23 +65,56 @@ export class OperationsFinanceService {
     clientCount?: number;
   }) {
     const d = parseDateParam(body.date);
-    const existing = await this.prisma.opsFinanceDay.findUnique({ where: { date: d } });
-    const revenue = body.revenue !== undefined ? Math.round(body.revenue) : (existing?.revenue ?? 0);
+    const existing = await this.prisma.opsFinanceDay.findUnique({
+      where: { date: d },
+    });
+    const revenue =
+      body.revenue !== undefined
+        ? Math.round(body.revenue)
+        : (existing?.revenue ?? 0);
     const revenueNoDiscount =
-      body.revenueNoDiscount !== undefined ?
-        Math.round(body.revenueNoDiscount)
-      : (existing?.revenueNoDiscount ?? revenue);
-    const discounts = body.discounts !== undefined ? Math.round(body.discounts) : (existing?.discounts ?? 0);
-    const salary = body.salary !== undefined ? Math.round(body.salary) : (existing?.salary ?? 0);
-    const expenses = body.expenses !== undefined ? Math.round(body.expenses) : (existing?.expenses ?? 0);
+      body.revenueNoDiscount !== undefined
+        ? Math.round(body.revenueNoDiscount)
+        : (existing?.revenueNoDiscount ?? revenue);
+    const discounts =
+      body.discounts !== undefined
+        ? Math.round(body.discounts)
+        : (existing?.discounts ?? 0);
+    const salary =
+      body.salary !== undefined
+        ? Math.round(body.salary)
+        : (existing?.salary ?? 0);
+    const expenses =
+      body.expenses !== undefined
+        ? Math.round(body.expenses)
+        : (existing?.expenses ?? 0);
     const clientCount =
-      body.clientCount !== undefined ? Math.round(body.clientCount) : (existing?.clientCount ?? 0);
+      body.clientCount !== undefined
+        ? Math.round(body.clientCount)
+        : (existing?.clientCount ?? 0);
     const net = revenueNoDiscount - salary - discounts - expenses;
 
     const row = await this.prisma.opsFinanceDay.upsert({
       where: { date: d },
-      create: { date: d, revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount },
-      update: { revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount },
+      create: {
+        date: d,
+        revenue,
+        revenueNoDiscount,
+        expenses,
+        discounts,
+        salary,
+        net,
+        clientCount,
+      },
+      update: {
+        revenue,
+        revenueNoDiscount,
+        expenses,
+        discounts,
+        salary,
+        net,
+        clientCount,
+      },
     });
     return {
       date: isoDate(row.date),
@@ -95,7 +128,10 @@ export class OperationsFinanceService {
     };
   }
 
-  private async loadRange(from: Date, to: Date): Promise<Map<string, DayEntry>> {
+  private async loadRange(
+    from: Date,
+    to: Date,
+  ): Promise<Map<string, DayEntry>> {
     const rows = await this.prisma.opsFinanceDay.findMany({
       where: { date: { gte: from, lte: to } },
     });
@@ -142,17 +178,50 @@ export class OperationsFinanceService {
     const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 
     return [
-      { key: 'revenue', label: 'Общая выручка', values: revenueVals, total: sum(revenueVals) },
-      { key: 'salary', label: 'ЗП', values: salaryVals, total: sum(salaryVals) },
-      { key: 'discounts', label: 'Скидки', values: discountVals, total: sum(discountVals) },
-      { key: 'expenses', label: 'Расходы', values: expenseVals, total: sum(expenseVals) },
-      { key: 'net', label: 'Выручка без всех расходов', values: netVals, total: sum(netVals) },
-      { key: 'clients', label: 'Клиентки', values: clientVals, total: sum(clientVals) },
+      {
+        key: 'revenue',
+        label: 'Общая выручка',
+        values: revenueVals,
+        total: sum(revenueVals),
+      },
+      {
+        key: 'salary',
+        label: 'ЗП',
+        values: salaryVals,
+        total: sum(salaryVals),
+      },
+      {
+        key: 'discounts',
+        label: 'Скидки',
+        values: discountVals,
+        total: sum(discountVals),
+      },
+      {
+        key: 'expenses',
+        label: 'Расходы',
+        values: expenseVals,
+        total: sum(expenseVals),
+      },
+      {
+        key: 'net',
+        label: 'Выручка без всех расходов',
+        values: netVals,
+        total: sum(netVals),
+      },
+      {
+        key: 'clients',
+        label: 'Клиентки',
+        values: clientVals,
+        total: sum(clientVals),
+      },
     ];
   }
 
   /** Итого под каждым столбцом (для месяца — по дням). */
-  private columnFooters(columns: Array<{ date: string }>, getEntry: (date: string) => DayEntry) {
+  private columnFooters(
+    columns: Array<{ date: string }>,
+    getEntry: (date: string) => DayEntry,
+  ) {
     return columns.map((col) => {
       const e = getEntry(col.date);
       return {
@@ -184,9 +253,13 @@ export class OperationsFinanceService {
         return { key: date, date, label: String(day) };
       });
 
-      const getEntry = (col: { date: string }) => map.get(col.date) ?? this.emptyDay(col.date);
+      const getEntry = (col: { date: string }) =>
+        map.get(col.date) ?? this.emptyDay(col.date);
       const rows = this.buildRows(columns, getEntry);
-      const footers = this.columnFooters(columns, (d) => map.get(d) ?? this.emptyDay(d));
+      const footers = this.columnFooters(
+        columns,
+        (d) => map.get(d) ?? this.emptyDay(d),
+      );
 
       return {
         period,
@@ -217,9 +290,13 @@ export class OperationsFinanceService {
       }
       const to = parseDateParam(columns[6]!.date);
       const map = await this.loadRange(from, to);
-      const getEntry = (col: { date: string }) => map.get(col.date) ?? this.emptyDay(col.date);
+      const getEntry = (col: { date: string }) =>
+        map.get(col.date) ?? this.emptyDay(col.date);
       const rows = this.buildRows(columns, getEntry);
-      const footers = this.columnFooters(columns, (d) => map.get(d) ?? this.emptyDay(d));
+      const footers = this.columnFooters(
+        columns,
+        (d) => map.get(d) ?? this.emptyDay(d),
+      );
       return {
         period,
         title: `Неделя · ${columns[0]!.label}–${columns[6]!.label} ${MONTHS_RU[m]} ${y}`,
@@ -245,7 +322,6 @@ export class OperationsFinanceService {
         const yy = y + Math.floor(mm / 12);
         const mi = mm % 12;
         const from = new Date(Date.UTC(yy, mi, 1));
-        const to = new Date(Date.UTC(yy, mi, daysInMonth(yy, mi)));
         columns.push({
           key: isoDate(from),
           date: isoDate(from),
@@ -278,7 +354,9 @@ export class OperationsFinanceService {
         let net = 0;
         let clientCount = 0;
         for (let d = 1; d <= dim; d++) {
-          const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
+          const e =
+            map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ??
+            this.emptyDay('');
           revenue += e.revenue;
           revenueNoDiscount += e.revenueNoDiscount;
           expenses += e.expenses;
@@ -287,15 +365,21 @@ export class OperationsFinanceService {
           net += e.net;
           clientCount += e.clientCount;
         }
-        return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount };
+        return {
+          date: startIso,
+          revenue,
+          revenueNoDiscount,
+          expenses,
+          discounts,
+          salary,
+          net,
+          clientCount,
+        };
       };
 
       const getEntry = (col: { date: string }) => aggregate(col.date);
       const aggCols = columns.map((c) => ({ date: c.date }));
-      const rows = this.buildRows(
-        columns,
-        (col) => getEntry(col),
-      );
+      const rows = this.buildRows(columns, (col) => getEntry(col));
       const footers = aggCols.map((c) => {
         const e = getEntry({ date: c.date });
         return {
@@ -354,7 +438,8 @@ export class OperationsFinanceService {
       let net = 0;
       let clientCount = 0;
       for (let d = 1; d <= dim; d++) {
-        const e = map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
+        const e =
+          map.get(isoDate(new Date(Date.UTC(yy, mi, d)))) ?? this.emptyDay('');
         revenue += e.revenue;
         revenueNoDiscount += e.revenueNoDiscount;
         expenses += e.expenses;
@@ -363,7 +448,16 @@ export class OperationsFinanceService {
         net += e.net;
         clientCount += e.clientCount;
       }
-      return { date: startIso, revenue, revenueNoDiscount, expenses, discounts, salary, net, clientCount };
+      return {
+        date: startIso,
+        revenue,
+        revenueNoDiscount,
+        expenses,
+        discounts,
+        salary,
+        net,
+        clientCount,
+      };
     };
 
     const rows = this.buildRows(columns, (col) => aggregateMonth(col.date));
@@ -418,7 +512,9 @@ export class OperationsFinanceService {
   }
 
   async removeExpense(id: string) {
-    const row = await this.prisma.opsFinanceExpenseItem.findUnique({ where: { id } });
+    const row = await this.prisma.opsFinanceExpenseItem.findUnique({
+      where: { id },
+    });
     if (!row) throw new BadRequestException('Расход не найден');
     await this.prisma.opsFinanceExpenseItem.delete({ where: { id } });
     await this.syncFromProcedures(isoDate(row.date));
@@ -443,7 +539,9 @@ export class OperationsFinanceService {
     const salary = procedures.reduce((s, p) => s + p.masterSalary, 0);
     const clientCount = procedures.length;
 
-    const expenseItems = await this.prisma.opsFinanceExpenseItem.findMany({ where: { date: d } });
+    const expenseItems = await this.prisma.opsFinanceExpenseItem.findMany({
+      where: { date: d },
+    });
     const expenses = expenseItems.reduce((s, e) => s + e.amount, 0);
     const net = revenueGross - salary - discounts - expenses;
 
@@ -459,7 +557,15 @@ export class OperationsFinanceService {
         net,
         clientCount,
       },
-      update: { revenue, revenueNoDiscount: revenueGross, discounts, salary, expenses, net, clientCount },
+      update: {
+        revenue,
+        revenueNoDiscount: revenueGross,
+        discounts,
+        salary,
+        expenses,
+        net,
+        clientCount,
+      },
     });
 
     return {

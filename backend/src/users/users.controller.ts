@@ -25,7 +25,10 @@ export class UsersController {
   }
 
   @Patch('me')
-  updateMe(@CurrentUser() user: JwtUserPayload, @Body() dto: UpdateMyProfileDto) {
+  updateMe(
+    @CurrentUser() user: JwtUserPayload,
+    @Body() dto: UpdateMyProfileDto,
+  ) {
     return this.users.updateMyProfile(user.sub, dto);
   }
 

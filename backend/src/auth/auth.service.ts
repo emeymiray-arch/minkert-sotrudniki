@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
@@ -24,7 +28,9 @@ export class AuthService {
   ) {}
 
   private accessExpirySeconds(): number {
-    return Number(this.config.get<string>('JWT_ACCESS_EXPIRES_SECONDS') ?? 3600);
+    return Number(
+      this.config.get<string>('JWT_ACCESS_EXPIRES_SECONDS') ?? 3600,
+    );
   }
 
   private refreshExpiryDays(): number {
@@ -93,7 +99,9 @@ export class AuthService {
 
   async logout(refreshToken: string): Promise<{ revoked: boolean }> {
     const tokenSha256 = sha256(refreshToken);
-    const res = await this.prisma.refreshToken.deleteMany({ where: { tokenSha256 } });
+    const res = await this.prisma.refreshToken.deleteMany({
+      where: { tokenSha256 },
+    });
     return { revoked: res.count > 0 };
   }
 
@@ -119,8 +127,15 @@ export class AuthService {
   }
 
   /** Только когда в базе нет пользователей — создаётся первый ADMIN для bootstrap. */
-  async registerBootstrap(dto: { email: string; password: string; name: string }) {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_BOOTSTRAP !== 'true') {
+  async registerBootstrap(dto: {
+    email: string;
+    password: string;
+    name: string;
+  }) {
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ALLOW_BOOTSTRAP !== 'true'
+    ) {
       throw new ForbiddenException('Регистрация отключена в production');
     }
     const count = await this.users.countUsers();
@@ -129,7 +144,12 @@ export class AuthService {
         'Публичная регистрация отключена. Войдите под учётной записью или используйте сид данных.',
       );
     }
-    const user = await this.users.registerUser(dto.email, dto.password, dto.name, UserRole.ADMIN);
+    const user = await this.users.registerUser(
+      dto.email,
+      dto.password,
+      dto.name,
+      UserRole.ADMIN,
+    );
     const tokens = await this.issueTokens(user);
     return {
       tokens,

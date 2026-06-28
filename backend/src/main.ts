@@ -1,10 +1,16 @@
 import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { initSentryIfConfigured } from './common/sentry/init-sentry';
+import { validateEnvOnStartup } from './common/startup/validate-env';
 
 async function bootstrap() {
+  initSentryIfConfigured();
+  validateEnvOnStartup();
+
   const logger = new Logger('Bootstrap');
   const isProd = process.env.NODE_ENV === 'production';
 
@@ -29,14 +35,19 @@ async function bootstrap() {
 
   const originsRaw = process.env.CORS_ORIGIN?.trim();
   if (isProd && !originsRaw) {
-    logger.error('CORS_ORIGIN не задан в production — API не примет запросы с фронта');
+    logger.error(
+      'CORS_ORIGIN не задан в production — API не примет запросы с фронта',
+    );
   }
   app.enableCors({
-    origin:
-      originsRaw?.length ?
-        originsRaw.split(',').map((s) => s.trim()).filter(Boolean)
-      : isProd ? false
-      : true,
+    origin: originsRaw?.length
+      ? originsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : isProd
+        ? false
+        : true,
     credentials: true,
   });
 
@@ -55,10 +66,23 @@ async function bootstrap() {
     }),
   );
 
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Minkert API')
+    .setDescription('REST API платформы Minkert')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+
   const port = Number(process.env.PORT ?? 3000);
   const host = process.env.HOST ?? '0.0.0.0';
   await app.listen(port, host);
-  logger.log(`API доступна на http://localhost:${port}/api (bind ${host}, prod=${isProd})`);
+  logger.log(
+    `API: http://localhost:${port}/api | docs: /api/docs | health: /api/health`,
+  );
 }
 
 bootstrap().catch((err) => {

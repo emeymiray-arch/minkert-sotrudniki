@@ -1,7 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsService } from '../analytics/analytics.service';
-import { addUtcDays, endUtcMonth, startUtcMonth, startUtcWeekMonday } from '../common/date/week';
-import { paginatedResult, parsePagination } from '../common/pagination/pagination.util';
+import {
+  addUtcDays,
+  endUtcMonth,
+  startUtcMonth,
+  startUtcWeekMonday,
+} from '../common/date/week';
+import {
+  paginatedResult,
+  parsePagination,
+} from '../common/pagination/pagination.util';
 import { CrmService } from '../crm/crm.service';
 import { OperationsFinanceService } from '../operations/operations-finance.service';
 import { OperationsService } from '../operations/operations.service';
@@ -12,7 +20,9 @@ type BusinessPlans = Record<string, MonthPlan>;
 
 function utcToday() {
   const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+  return new Date(
+    Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()),
+  );
 }
 
 function monthKey(d: Date) {
@@ -39,18 +49,29 @@ export class InsightsService {
   ) {}
 
   private async getPlans(): Promise<BusinessPlans> {
-    const row = await this.prisma.opsSettings.findUnique({ where: { id: 'default' } });
+    const row = await this.prisma.opsSettings.findUnique({
+      where: { id: 'default' },
+    });
     const raw = row?.businessPlans;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
     return raw as BusinessPlans;
   }
 
-  async setPlan(month: string, body: { revenuePlan?: number; clientPlan?: number }) {
+  async setPlan(
+    month: string,
+    body: { revenuePlan?: number; clientPlan?: number },
+  ) {
     const plans = await this.getPlans();
     const prev = plans[month] ?? {};
     plans[month] = {
-      revenuePlan: body.revenuePlan !== undefined ? Math.max(0, Math.round(body.revenuePlan)) : prev.revenuePlan,
-      clientPlan: body.clientPlan !== undefined ? Math.max(0, Math.round(body.clientPlan)) : prev.clientPlan,
+      revenuePlan:
+        body.revenuePlan !== undefined
+          ? Math.max(0, Math.round(body.revenuePlan))
+          : prev.revenuePlan,
+      clientPlan:
+        body.clientPlan !== undefined
+          ? Math.max(0, Math.round(body.clientPlan))
+          : prev.clientPlan,
     };
     await this.prisma.opsSettings.upsert({
       where: { id: 'default' },
@@ -124,27 +145,37 @@ export class InsightsService {
       this.prisma.opsProblem.count({ where: { resolved: false } }),
       this.crm.listIntervals(undefined, undefined, 1, 500),
       this.prisma.crmClient.count(),
-      this.prisma.crmClient.count({ where: { createdAt: { gte: monthStart } } }),
+      this.prisma.crmClient.count({
+        where: { createdAt: { gte: monthStart } },
+      }),
     ]);
 
     const intervals = intervalsPage.items;
 
     const weekRevenueTrend =
-      prevWeekFin.revenue > 0 ?
-        Number((((weekFin.revenue - prevWeekFin.revenue) / prevWeekFin.revenue) * 100).toFixed(1))
-      : 0;
+      prevWeekFin.revenue > 0
+        ? Number(
+            (
+              ((weekFin.revenue - prevWeekFin.revenue) / prevWeekFin.revenue) *
+              100
+            ).toFixed(1),
+          )
+        : 0;
 
-    const repeatDue = intervals.filter((i) => i.urgency === 'overdue' || i.urgency === 'due_soon').length;
-    const overdueIntervals = intervals.filter((i) => i.urgency === 'overdue').length;
+    const repeatDue = intervals.filter(
+      (i) => i.urgency === 'overdue' || i.urgency === 'due_soon',
+    ).length;
+    const overdueIntervals = intervals.filter(
+      (i) => i.urgency === 'overdue',
+    ).length;
     const bestEmployee = teamDash.best[0];
-    const bestName =
-      bestEmployee ?
-        (
+    const bestName = bestEmployee
+      ? ((
           await this.prisma.employee.findUnique({
             where: { id: bestEmployee.employeeId },
             select: { name: true },
           })
-        )?.name ?? '—'
+        )?.name ?? '—')
       : '—';
 
     const dash = {
@@ -177,7 +208,9 @@ export class InsightsService {
         weekTrend: teamDash.weekOverWeekTrend,
         bestName,
         bestKpi: bestEmployee?.weeklyEfficiency ?? 0,
-        atRiskCount: teamDash.atRiskEmployees.filter((e) => e.weeklyEfficiency > 0 && e.weeklyEfficiency < 60).length,
+        atRiskCount: teamDash.atRiskEmployees.filter(
+          (e) => e.weeklyEfficiency > 0 && e.weeklyEfficiency < 60,
+        ).length,
         managerKpi: managerKpi.weekly.kpi,
         activeCount: managerKpi.activeEmployees,
       },
@@ -192,7 +225,9 @@ export class InsightsService {
       loyalty: {
         totalClients: loyaltyTotal,
         active30d: loyaltyActive,
-        index: loyaltyTotal ? Math.round((loyaltyActive / loyaltyTotal) * 100) : 0,
+        index: loyaltyTotal
+          ? Math.round((loyaltyActive / loyaltyTotal) * 100)
+          : 0,
       },
     };
 
@@ -207,19 +242,24 @@ export class InsightsService {
     };
   }
 
-  async unifiedClients(q?: string, pageRaw?: string | number, limitRaw?: string | number) {
+  async unifiedClients(
+    q?: string,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ) {
     const query = q?.trim();
     const { page, limit } = parsePagination(pageRaw, limitRaw, 50, 100);
     const [crmPage, loyaltyRows] = await Promise.all([
       this.crm.listClients(query, undefined, undefined, page, limit),
       this.prisma.loyaltyClient.findMany({
-        where:
-          query ?
-            {
+        where: query
+          ? {
               OR: [
                 { name: { contains: query, mode: 'insensitive' } },
                 { phone: { contains: query, mode: 'insensitive' } },
-                ...(normalizePhone(query) ? [{ phoneNormalized: { contains: normalizePhone(query) } }] : []),
+                ...(normalizePhone(query)
+                  ? [{ phoneNormalized: { contains: normalizePhone(query) } }]
+                  : []),
               ],
             }
           : undefined,
@@ -255,7 +295,9 @@ export class InsightsService {
     }
 
     const merged = crmRows.map((c) => {
-      const loyalty = c.phoneNormalized ? loyaltyByPhone.get(c.phoneNormalized) : undefined;
+      const loyalty = c.phoneNormalized
+        ? loyaltyByPhone.get(c.phoneNormalized)
+        : undefined;
       if (loyalty) loyaltyByPhone.delete(c.phoneNormalized);
       return {
         id: c.id,
@@ -265,12 +307,12 @@ export class InsightsService {
         visitsCount: c.visitsCount,
         totalSpent: c.totalSpent,
         recommendedNextAt: c.recommendedNextAt,
-        loyalty:
-          loyalty ?
-            {
+        loyalty: loyalty
+          ? {
               id: loyalty.id,
               stamps: loyalty._count.stamps,
-              giftAvailable: loyalty._count.stamps >= 9 && loyalty.stamps.length === 0,
+              giftAvailable:
+                loyalty._count.stamps >= 9 && loyalty.stamps.length === 0,
             }
           : null,
       };
@@ -292,7 +334,12 @@ export class InsightsService {
     }));
 
     const items = [...merged, ...loyaltyOnly];
-    return paginatedResult(items, crmPage.total + loyaltyOnly.length, page, limit);
+    return paginatedResult(
+      items,
+      crmPage.total + loyaltyOnly.length,
+      page,
+      limit,
+    );
   }
 
   private trendPhrase(delta: number, unit: string) {
@@ -301,7 +348,9 @@ export class InsightsService {
     return `не изменилась ${unit}`;
   }
 
-  private buildAiInsights(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+  private buildAiInsights(
+    ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>,
+  ) {
     return {
       director: this.buildAiDirector(ctx),
       finance: this.buildAiFinance(ctx),
@@ -311,7 +360,9 @@ export class InsightsService {
     };
   }
 
-  private buildAiDirector(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+  private buildAiDirector(
+    ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>,
+  ) {
     const { dash, overdueIntervals } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
@@ -324,111 +375,187 @@ export class InsightsService {
         `План месяца выполнен на ${dash.business.planCompletionRevenue}% по выручке (${dash.business.revenueMonth.toLocaleString('ru-RU')} из ${dash.business.revenuePlan.toLocaleString('ru-RU')} ₽).`,
       );
     }
-    conclusions.push(`KPI команды за неделю — ${dash.employees.teamKpi.toFixed(1)}% (${dash.employees.weekTrend >= 0 ? '+' : ''}${dash.employees.weekTrend.toFixed(1)} п.п. к прошлой неделе).`);
+    conclusions.push(
+      `KPI команды за неделю — ${dash.employees.teamKpi.toFixed(1)}% (${dash.employees.weekTrend >= 0 ? '+' : ''}${dash.employees.weekTrend.toFixed(1)} п.п. к прошлой неделе).`,
+    );
     if (overdueIntervals > 0) {
-      conclusions.push(`Повторные записи: ${overdueIntervals} клиентов просрочили рекомендованный интервал.`);
-      recommendations.push('Проверьте работу с клиентской базой — CRM → Интервалы / Повторный контакт.');
+      conclusions.push(
+        `Повторные записи: ${overdueIntervals} клиентов просрочили рекомендованный интервал.`,
+      );
+      recommendations.push(
+        'Проверьте работу с клиентской базой — CRM → Интервалы / Повторный контакт.',
+      );
     }
     if (dash.control.overdue > 0) {
-      conclusions.push(`В контроле ${dash.control.overdue} просроченных задач.`);
+      conclusions.push(
+        `В контроле ${dash.control.overdue} просроченных задач.`,
+      );
       recommendations.push('Разберите просрочки в разделе «Контроль».');
     }
     if (dash.employees.atRiskCount > 0) {
-      conclusions.push(`${dash.employees.atRiskCount} сотрудников в зоне риска по KPI.`);
+      conclusions.push(
+        `${dash.employees.atRiskCount} сотрудников в зоне риска по KPI.`,
+      );
       recommendations.push('Проведите разбор с сотрудниками из зоны внимания.');
     }
     if (!recommendations.length) {
-      recommendations.push('Показатели в норме — продолжайте текущий ритм работы.');
+      recommendations.push(
+        'Показатели в норме — продолжайте текущий ритм работы.',
+      );
     }
 
     return { role: 'director', conclusions, recommendations };
   }
 
-  private buildAiFinance(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+  private buildAiFinance(
+    ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>,
+  ) {
     const { dash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
-    conclusions.push(`Выручка сегодня: ${dash.business.revenueToday.toLocaleString('ru-RU')} ₽.`);
-    conclusions.push(`За месяц: ${dash.business.revenueMonth.toLocaleString('ru-RU')} ₽, чистая выручка: ${dash.business.netMonth.toLocaleString('ru-RU')} ₽.`);
-    conclusions.push(`Расходы за месяц: ${dash.business.expensesMonth.toLocaleString('ru-RU')} ₽.`);
-    conclusions.push(this.trendPhrase(dash.business.weekRevenueTrend, 'за неделю'));
+    conclusions.push(
+      `Выручка сегодня: ${dash.business.revenueToday.toLocaleString('ru-RU')} ₽.`,
+    );
+    conclusions.push(
+      `За месяц: ${dash.business.revenueMonth.toLocaleString('ru-RU')} ₽, чистая выручка: ${dash.business.netMonth.toLocaleString('ru-RU')} ₽.`,
+    );
+    conclusions.push(
+      `Расходы за месяц: ${dash.business.expensesMonth.toLocaleString('ru-RU')} ₽.`,
+    );
+    conclusions.push(
+      this.trendPhrase(dash.business.weekRevenueTrend, 'за неделю'),
+    );
 
-    if (dash.business.expensesMonth > dash.business.revenueMonth * 0.5 && dash.business.revenueMonth > 0) {
-      conclusions.push('Расходы превышают 50% выручки — стоит проверить статьи затрат.');
+    if (
+      dash.business.expensesMonth > dash.business.revenueMonth * 0.5 &&
+      dash.business.revenueMonth > 0
+    ) {
+      conclusions.push(
+        'Расходы превышают 50% выручки — стоит проверить статьи затрат.',
+      );
       recommendations.push('Откройте «Финансы» и сравните расходы по дням.');
     }
-    if (dash.business.revenuePlan > 0 && dash.business.planCompletionRevenue < 70) {
-      const daysLeft = new Date(utcToday().getUTCFullYear(), utcToday().getUTCMonth() + 1, 0).getUTCDate() - utcToday().getUTCDate();
-      const forecast = Math.round((dash.business.revenueMonth / utcToday().getUTCDate()) * (utcToday().getUTCDate() + daysLeft));
-      conclusions.push(`Прогноз выручки на конец месяца (линейный): ~${forecast.toLocaleString('ru-RU')} ₽.`);
-      recommendations.push('Усильте продажи или скорректируйте план, если он нереалистичен.');
+    if (
+      dash.business.revenuePlan > 0 &&
+      dash.business.planCompletionRevenue < 70
+    ) {
+      const daysLeft =
+        new Date(
+          utcToday().getUTCFullYear(),
+          utcToday().getUTCMonth() + 1,
+          0,
+        ).getUTCDate() - utcToday().getUTCDate();
+      const forecast = Math.round(
+        (dash.business.revenueMonth / utcToday().getUTCDate()) *
+          (utcToday().getUTCDate() + daysLeft),
+      );
+      conclusions.push(
+        `Прогноз выручки на конец месяца (линейный): ~${forecast.toLocaleString('ru-RU')} ₽.`,
+      );
+      recommendations.push(
+        'Усильте продажи или скорректируйте план, если он нереалистичен.',
+      );
     }
 
     return { role: 'finance', conclusions, recommendations };
   }
 
-  private buildAiHr(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+  private buildAiHr(
+    ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>,
+  ) {
     const { dash, teamDash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
-    conclusions.push(`Средний KPI команды: ${dash.employees.teamKpi.toFixed(1)}%.`);
+    conclusions.push(
+      `Средний KPI команды: ${dash.employees.teamKpi.toFixed(1)}%.`,
+    );
     if (dash.employees.bestName !== '—') {
-      conclusions.push(`Лучший сотрудник периода: ${dash.employees.bestName} (${dash.employees.bestKpi.toFixed(1)}%).`);
+      conclusions.push(
+        `Лучший сотрудник периода: ${dash.employees.bestName} (${dash.employees.bestKpi.toFixed(1)}%).`,
+      );
     }
     if (dash.employees.atRiskCount > 0) {
-      conclusions.push(`В зоне риска: ${dash.employees.atRiskCount} сотрудников (KPI ниже 60%).`);
-      recommendations.push('Откройте «Сотрудники» → доска KPI и разберите слабые задачи.');
+      conclusions.push(
+        `В зоне риска: ${dash.employees.atRiskCount} сотрудников (KPI ниже 60%).`,
+      );
+      recommendations.push(
+        'Откройте «Сотрудники» → доска KPI и разберите слабые задачи.',
+      );
     }
     if (teamDash.lowPerformingTasks.length > 0) {
-      conclusions.push(`Слабых задач на неделе: ${teamDash.lowPerformingTasks.length}.`);
+      conclusions.push(
+        `Слабых задач на неделе: ${teamDash.lowPerformingTasks.length}.`,
+      );
     }
     if (!recommendations.length) {
-      recommendations.push('Команда работает стабильно — закрепите лучшие практики лидеров.');
+      recommendations.push(
+        'Команда работает стабильно — закрепите лучшие практики лидеров.',
+      );
     }
 
     return { role: 'hr', conclusions, recommendations };
   }
 
-  private buildAiMarketing(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+  private buildAiMarketing(
+    ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>,
+  ) {
     const { dash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
-    conclusions.push(`Клиентов в CRM: ${dash.clients.crmTotal}, новых за месяц: ${dash.clients.newThisMonth}.`);
-    conclusions.push(`Программа лояльности: ${dash.loyalty.totalClients} клиентов, активность 30 дней — ${dash.loyalty.active30d}.`);
+    conclusions.push(
+      `Клиентов в CRM: ${dash.clients.crmTotal}, новых за месяц: ${dash.clients.newThisMonth}.`,
+    );
+    conclusions.push(
+      `Программа лояльности: ${dash.loyalty.totalClients} клиентов, активность 30 дней — ${dash.loyalty.active30d}.`,
+    );
     if (dash.clients.repeatDue > 0) {
-      conclusions.push(`${dash.clients.repeatDue} клиентов требуют повторного контакта по интервалу.`);
+      conclusions.push(
+        `${dash.clients.repeatDue} клиентов требуют повторного контакта по интервалу.`,
+      );
       recommendations.push('Обзвоните клиентов из CRM → Повторный контакт.');
     }
     if (dash.clients.noShows > 0) {
       conclusions.push(`Неявок по записям (всего): ${dash.clients.noShows}.`);
-      recommendations.push('Уточните причины неявок и напоминания перед визитом.');
+      recommendations.push(
+        'Уточните причины неявок и напоминания перед визитом.',
+      );
     }
     if (!recommendations.length) {
-      recommendations.push('Клиентская база в хорошем состоянии — развивайте повторные записи.');
+      recommendations.push(
+        'Клиентская база в хорошем состоянии — развивайте повторные записи.',
+      );
     }
 
     return { role: 'marketing', conclusions, recommendations };
   }
 
-  private buildAiOperations(ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>) {
+  private buildAiOperations(
+    ctx: Awaited<ReturnType<InsightsService['loadDashboardContext']>>,
+  ) {
     const { dash } = ctx;
     const conclusions: string[] = [];
     const recommendations: string[] = [];
 
-    conclusions.push(`Задач контроля: ${dash.control.totalTasks}, выполнено ${dash.control.done} (${dash.control.completionPercent}%).`);
+    conclusions.push(
+      `Задач контроля: ${dash.control.totalTasks}, выполнено ${dash.control.done} (${dash.control.completionPercent}%).`,
+    );
     if (dash.control.overdue > 0) {
       conclusions.push(`Просрочено: ${dash.control.overdue} задач.`);
       recommendations.push('Начните с просроченных задач в «Контроле».');
     }
     if (dash.control.problemsOpen > 0) {
       conclusions.push(`Открытых проблем: ${dash.control.problemsOpen}.`);
-      recommendations.push('Закройте или назначьте ответственных в «Проблемы».');
+      recommendations.push(
+        'Закройте или назначьте ответственных в «Проблемы».',
+      );
     }
     if (dash.control.needsAttention > 0) {
-      conclusions.push(`Требуют внимания: ${dash.control.needsAttention} задач.`);
+      conclusions.push(
+        `Требуют внимания: ${dash.control.needsAttention} задач.`,
+      );
     }
     if (!recommendations.length) {
       recommendations.push('Операционные процессы под контролем.');

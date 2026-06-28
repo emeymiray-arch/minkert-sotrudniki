@@ -14,7 +14,10 @@ export function formatSlotLabel(d: Date): string {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
-export function appointmentEndsAt(startsAt: Date, durationMinutes: number): Date {
+export function appointmentEndsAt(
+  startsAt: Date,
+  durationMinutes: number,
+): Date {
   return new Date(startsAt.getTime() + durationMinutes * 60_000);
 }
 
@@ -36,5 +39,8 @@ export function appointmentsOverlap(
 export function normalizeDurationMinutes(raw?: number | null): number {
   const n = Math.round(Number(raw ?? DEFAULT_APPOINTMENT_DURATION_MINUTES));
   if (!Number.isFinite(n)) return DEFAULT_APPOINTMENT_DURATION_MINUTES;
-  return Math.min(MAX_APPOINTMENT_DURATION_MINUTES, Math.max(MIN_APPOINTMENT_DURATION_MINUTES, n));
+  return Math.min(
+    MAX_APPOINTMENT_DURATION_MINUTES,
+    Math.max(MIN_APPOINTMENT_DURATION_MINUTES, n),
+  );
 }

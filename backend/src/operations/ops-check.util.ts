@@ -1,8 +1,13 @@
-import { OpsAttendanceMark, OpsTaskCheckType, OpsViolationType } from '@prisma/client';
+import {
+  OpsAttendanceMark,
+  OpsTaskCheckType,
+  OpsViolationType,
+} from '@prisma/client';
 
 export function inferCheckTypeFromTitle(title: string): OpsTaskCheckType {
   const t = title.toLowerCase();
-  if (/явк|опозд|приход|пришл|отсутств/.test(t)) return OpsTaskCheckType.ATTENDANCE;
+  if (/явк|опозд|приход|пришл|отсутств/.test(t))
+    return OpsTaskCheckType.ATTENDANCE;
   if (/чек|checklist|чек-лист/.test(t)) return OpsTaskCheckType.CHECKLIST;
   if (/отчёт|отчет|forms|google/.test(t)) return OpsTaskCheckType.REPORT;
   if (/провер|контрол|фикс/.test(t)) return OpsTaskCheckType.GENERIC;
@@ -35,7 +40,10 @@ export function checkEntryHasStoredData(entry: EntryLike): boolean {
   );
 }
 
-export function checkEntryHasIssue(entry: EntryLike, checkType: OpsTaskCheckType): boolean {
+export function checkEntryHasIssue(
+  entry: EntryLike,
+  checkType: OpsTaskCheckType,
+): boolean {
   switch (checkType) {
     case OpsTaskCheckType.ATTENDANCE:
       return (
@@ -61,23 +69,47 @@ export function violationFromCheckEntry(
 ): { type: OpsViolationType; description: string } | null {
   if (checkType === OpsTaskCheckType.ATTENDANCE) {
     if (entry.attendanceMark === OpsAttendanceMark.LATE) {
-      return { type: OpsViolationType.LATE, description: 'Опоздание (журнал явки)' };
+      return {
+        type: OpsViolationType.LATE,
+        description: 'Опоздание (журнал явки)',
+      };
     }
     if (entry.attendanceMark === OpsAttendanceMark.ABSENT) {
-      return { type: OpsViolationType.OTHER, description: 'Отсутствие (журнал явки)' };
+      return {
+        type: OpsViolationType.OTHER,
+        description: 'Отсутствие (журнал явки)',
+      };
     }
   }
   if (checkType === OpsTaskCheckType.CHECKLIST && entry.checklistIgnored) {
-    return { type: OpsViolationType.IGNORED_TASK, description: 'Игнор чек-листа' };
+    return {
+      type: OpsViolationType.IGNORED_TASK,
+      description: 'Игнор чек-листа',
+    };
   }
-  if (checkType === OpsTaskCheckType.CHECKLIST && entry.checklistOpened === false) {
-    return { type: OpsViolationType.IGNORED_TASK, description: 'Не открыл чек-лист' };
+  if (
+    checkType === OpsTaskCheckType.CHECKLIST &&
+    entry.checklistOpened === false
+  ) {
+    return {
+      type: OpsViolationType.IGNORED_TASK,
+      description: 'Не открыл чек-лист',
+    };
   }
-  if (checkType === OpsTaskCheckType.REPORT && entry.reportSubmitted === false) {
-    return { type: OpsViolationType.MISSED_REPORT, description: 'Отчёт не сдан' };
+  if (
+    checkType === OpsTaskCheckType.REPORT &&
+    entry.reportSubmitted === false
+  ) {
+    return {
+      type: OpsViolationType.MISSED_REPORT,
+      description: 'Отчёт не сдан',
+    };
   }
   if (checkType === OpsTaskCheckType.REPORT && entry.reportError) {
-    return { type: OpsViolationType.MISSED_REPORT, description: 'Ошибка в отчёте' };
+    return {
+      type: OpsViolationType.MISSED_REPORT,
+      description: 'Ошибка в отчёте',
+    };
   }
   return null;
 }

@@ -1,5 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsDate, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import {
+  IsDate,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { OptionalDayStatusesDto } from './day-status.dto';
 
 export class CreateTaskDto {

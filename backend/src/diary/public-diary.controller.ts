@@ -24,7 +24,11 @@ export class PublicDiaryController {
   @Public()
   @Throttle({ default: { limit: 40, ttl: 60_000 } })
   @Put(':token/days/:date')
-  putDay(@Param('token') token: string, @Param('date') date: string, @Body() dto: SavePublicDiaryDayDto) {
+  putDay(
+    @Param('token') token: string,
+    @Param('date') date: string,
+    @Body() dto: SavePublicDiaryDayDto,
+  ) {
     return this.diary.savePublicDay(token, date, dto.lines);
   }
 

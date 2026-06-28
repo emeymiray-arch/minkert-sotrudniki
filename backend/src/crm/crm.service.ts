@@ -1,8 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CrmClientStatus, CrmVisitStatus, UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
 import { addUtcDays } from '../common/date/week';
-import { paginatedResult, parsePagination, type Paginated } from '../common/pagination/pagination.util';
+import {
+  paginatedResult,
+  parsePagination,
+  type Paginated,
+} from '../common/pagination/pagination.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OperationsFinanceService } from '../operations/operations-finance.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -52,7 +60,8 @@ function parseDate(raw?: string | null) {
 
 function parseDateTime(raw: string) {
   const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) throw new BadRequestException('Некорректная дата/время');
+  if (Number.isNaN(d.getTime()))
+    throw new BadRequestException('Некорректная дата/время');
   return d;
 }
 
@@ -62,7 +71,9 @@ function dateOnlyIso(d?: Date | null) {
 
 function utcToday() {
   const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+  return new Date(
+    Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()),
+  );
 }
 
 function daysBetween(from: Date, to: Date) {
@@ -78,7 +89,9 @@ export class CrmService {
   ) {}
 
   private async loadCrmConfig(): Promise<CrmWorkspaceConfig> {
-    const row = await this.prisma.opsSettings.findUnique({ where: { id: 'default' } });
+    const row = await this.prisma.opsSettings.findUnique({
+      where: { id: 'default' },
+    });
     return normalizeCrmConfig({
       salons: row?.crmSalons,
       masterEmployeeIds: row?.crmMasterIds,
@@ -118,7 +131,12 @@ export class CrmService {
     });
   }
 
-  async createMaster(body: { name: string; phone?: string; specialty?: string; salonId?: string }) {
+  async createMaster(body: {
+    name: string;
+    phone?: string;
+    specialty?: string;
+    salonId?: string;
+  }) {
     const name = body.name?.trim();
     if (!name) throw new BadRequestException('Имя мастера обязательно');
     const count = await this.prisma.crmMaster.count();
@@ -135,7 +153,14 @@ export class CrmService {
 
   async updateMaster(
     id: string,
-    body: Partial<{ name: string; phone: string; specialty: string; salonId: string; active: boolean; sortOrder: number }>,
+    body: Partial<{
+      name: string;
+      phone: string;
+      specialty: string;
+      salonId: string;
+      active: boolean;
+      sortOrder: number;
+    }>,
   ) {
     await this.prisma.crmMaster.findUniqueOrThrow({ where: { id } });
     return this.prisma.crmMaster.update({
@@ -152,7 +177,10 @@ export class CrmService {
   }
 
   async deleteMaster(id: string) {
-    await this.prisma.crmMaster.update({ where: { id }, data: { active: false } });
+    await this.prisma.crmMaster.update({
+      where: { id },
+      data: { active: false },
+    });
     return { ok: true };
   }
 
@@ -172,10 +200,13 @@ export class CrmService {
     } catch {
       throw new BadRequestException('Дата: YYYY-MM-DD');
     }
-    const dayFinish = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1));
+    const dayFinish = new Date(
+      Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + 1),
+    );
     const masters = await this.listMasters(false);
-    const filteredMasters =
-      salonId?.trim() ? masters.filter((m) => !m.salonId || m.salonId === salonId.trim()) : masters;
+    const filteredMasters = salonId?.trim()
+      ? masters.filter((m) => !m.salonId || m.salonId === salonId.trim())
+      : masters;
 
     const appointments = await this.prisma.crmAppointment.findMany({
       where: {
@@ -184,7 +215,15 @@ export class CrmService {
         ...(salonId?.trim() ? { salonId: salonId.trim() } : {}),
       },
       include: {
-        client: { select: { id: true, fullName: true, phone: true, status: true, visitsCount: true } },
+        client: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            status: true,
+            visitsCount: true,
+          },
+        },
         master: { select: { id: true, name: true, specialty: true } },
       },
       orderBy: { startsAt: 'asc' },
@@ -252,7 +291,12 @@ export class CrmService {
       include: { client: { select: { fullName: true } } },
     });
     const conflict = existing.find((a) =>
-      appointmentsOverlap(startsAt, dur, a.startsAt, normalizeDurationMinutes(a.durationMinutes)),
+      appointmentsOverlap(
+        startsAt,
+        dur,
+        a.startsAt,
+        normalizeDurationMinutes(a.durationMinutes),
+      ),
     );
     if (conflict) {
       throw new BadRequestException(
@@ -284,7 +328,12 @@ export class CrmService {
       include: { client: { select: { fullName: true } } },
     });
     const conflict = existing.find((a) =>
-      appointmentsOverlap(at, dur, a.startsAt, normalizeDurationMinutes(a.durationMinutes)),
+      appointmentsOverlap(
+        at,
+        dur,
+        a.startsAt,
+        normalizeDurationMinutes(a.durationMinutes),
+      ),
     );
     return {
       available: !conflict,
@@ -292,7 +341,10 @@ export class CrmService {
     };
   }
 
-  private ensureMasterScope(where: Record<string, unknown>, user?: JwtUserPayload) {
+  private ensureMasterScope(
+    where: Record<string, unknown>,
+    user?: JwtUserPayload,
+  ) {
     const masterId = this.masterIdForUser(user);
     if (masterId) {
       where.OR = [
@@ -310,7 +362,9 @@ export class CrmService {
       return { fullName: { contains: parts[0], mode: 'insensitive' } };
     }
     return {
-      AND: parts.map((part) => ({ fullName: { contains: part, mode: 'insensitive' } })),
+      AND: parts.map((part) => ({
+        fullName: { contains: part, mode: 'insensitive' },
+      })),
     };
   }
 
@@ -338,12 +392,20 @@ export class CrmService {
       visitsCount: number;
       lastProcedureAt: Date | null;
       recommendedNextAt: Date | null;
-      procedures?: Array<{ intervalDays: number; procedureDate: Date; service: string; sequenceNumber?: number }>;
+      procedures?: Array<{
+        intervalDays: number;
+        procedureDate: Date;
+        service: string;
+        sequenceNumber?: number;
+      }>;
       appointments?: unknown[];
     },
     loyaltyStamps?: number,
   ) {
-    const compliance = computeIntervalCompliance(c.visitsCount, c.lastProcedureAt);
+    const compliance = computeIntervalCompliance(
+      c.visitsCount,
+      c.lastProcedureAt,
+    );
     const lastProc = c.procedures?.[0];
     return {
       ...c,
@@ -351,14 +413,14 @@ export class CrmService {
       recommendedNextAt: dateOnlyIso(c.recommendedNextAt),
       loyaltyStamps: loyaltyStamps ?? null,
       interval: compliance,
-      lastProcedure: lastProc ?
-        {
-          service: lastProc.service,
-          intervalDays: lastProc.intervalDays,
-          procedureDate: dateOnlyIso(lastProc.procedureDate),
-          sequenceNumber: lastProc.sequenceNumber,
-        }
-      : null,
+      lastProcedure: lastProc
+        ? {
+            service: lastProc.service,
+            intervalDays: lastProc.intervalDays,
+            procedureDate: dateOnlyIso(lastProc.procedureDate),
+            sequenceNumber: lastProc.sequenceNumber,
+          }
+        : null,
     };
   }
 
@@ -416,10 +478,16 @@ export class CrmService {
   }
 
   async clientIntervalStatus(clientId: string, plannedAt?: string) {
-    const client = await this.prisma.crmClient.findUnique({ where: { id: clientId } });
+    const client = await this.prisma.crmClient.findUnique({
+      where: { id: clientId },
+    });
     if (!client) throw new NotFoundException('Клиент не найден');
     const ref = plannedAt ? parseDateTime(plannedAt) : utcToday();
-    return computeIntervalCompliance(client.visitsCount, client.lastProcedureAt, ref);
+    return computeIntervalCompliance(
+      client.visitsCount,
+      client.lastProcedureAt,
+      ref,
+    );
   }
 
   async listClients(
@@ -445,12 +513,22 @@ export class CrmService {
           appointments: {
             orderBy: { startsAt: 'desc' },
             take: 1,
-            select: { id: true, startsAt: true, service: true, visitStatus: true },
+            select: {
+              id: true,
+              startsAt: true,
+              service: true,
+              visitStatus: true,
+            },
           },
           procedures: {
             orderBy: { procedureDate: 'desc' },
             take: 1,
-            select: { intervalDays: true, procedureDate: true, service: true, sequenceNumber: true },
+            select: {
+              intervalDays: true,
+              procedureDate: true,
+              service: true,
+              sequenceNumber: true,
+            },
           },
         },
         orderBy: { updatedAt: 'desc' },
@@ -459,8 +537,12 @@ export class CrmService {
       }),
     ]);
 
-    const stampMap = await this.batchLoyaltyStamps(rows.map((c) => c.phoneNormalized));
-    const items = rows.map((c) => this.enrichClientRow(c, stampMap.get(c.phoneNormalized)));
+    const stampMap = await this.batchLoyaltyStamps(
+      rows.map((c) => c.phoneNormalized),
+    );
+    const items = rows.map((c) =>
+      this.enrichClientRow(c, stampMap.get(c.phoneNormalized)),
+    );
     return paginatedResult(items, total, page, limit);
   }
 
@@ -588,15 +670,17 @@ export class CrmService {
       data: {
         fullName: body.fullName?.trim(),
         phone: body.phone?.trim(),
-        phoneNormalized: body.phone !== undefined ? normalizePhone(body.phone) : undefined,
-        birthDate: body.birthDate !== undefined ? parseDate(body.birthDate) : undefined,
+        phoneNormalized:
+          body.phone !== undefined ? normalizePhone(body.phone) : undefined,
+        birthDate:
+          body.birthDate !== undefined ? parseDate(body.birthDate) : undefined,
         note: body.note?.trim(),
         status: body.status,
         warned: body.warned,
         discountPercent:
-          body.discountPercent !== undefined ?
-            Math.min(100, Math.max(0, Math.round(body.discountPercent)))
-          : undefined,
+          body.discountPercent !== undefined
+            ? Math.min(100, Math.max(0, Math.round(body.discountPercent)))
+            : undefined,
       },
     });
 
@@ -604,8 +688,12 @@ export class CrmService {
       const loyalty = await this.prisma.loyaltyClient.findFirst({
         where: {
           OR: [
-            ...(prev.phoneNormalized ? [{ phoneNormalized: prev.phoneNormalized }] : []),
-            ...(updated.phoneNormalized ? [{ phoneNormalized: updated.phoneNormalized }] : []),
+            ...(prev.phoneNormalized
+              ? [{ phoneNormalized: prev.phoneNormalized }]
+              : []),
+            ...(updated.phoneNormalized
+              ? [{ phoneNormalized: updated.phoneNormalized }]
+              : []),
           ],
         },
       });
@@ -650,27 +738,42 @@ export class CrmService {
       throw new BadRequestException('Недостаточно прав');
     }
     const procedureDate = parseDate(body.procedureDate);
-    if (!procedureDate) throw new BadRequestException('Дата процедуры обязательна');
+    if (!procedureDate)
+      throw new BadRequestException('Дата процедуры обязательна');
     const service = body.service?.trim();
     if (!service) throw new BadRequestException('Услуга обязательна');
     const intervalDays = Math.max(0, Math.round(Number(body.intervalDays)));
 
-    const clientRow = await this.prisma.crmClient.findUnique({ where: { id: clientId } });
+    const clientRow = await this.prisma.crmClient.findUnique({
+      where: { id: clientId },
+    });
     if (!clientRow) throw new NotFoundException('Клиент не найден');
 
     const basePrice = Math.max(0, Math.round(body.basePrice ?? body.cost ?? 0));
     const extraCost = Math.max(0, Math.round(body.extraCost ?? 0));
     let pricing;
     if (body.finalMainPrice !== undefined) {
-      pricing = calcProcedurePricing(basePrice, { mode: 'final', finalMainPrice: body.finalMainPrice }, extraCost);
+      pricing = calcProcedurePricing(
+        basePrice,
+        { mode: 'final', finalMainPrice: body.finalMainPrice },
+        extraCost,
+      );
     } else if (body.discountAmount !== undefined) {
-      pricing = calcProcedurePricing(basePrice, { mode: 'amount', discountAmount: body.discountAmount }, extraCost);
+      pricing = calcProcedurePricing(
+        basePrice,
+        { mode: 'amount', discountAmount: body.discountAmount },
+        extraCost,
+      );
     } else {
       const discountPercent =
-        body.discountPercent !== undefined ?
-          Math.min(100, Math.max(0, Math.round(body.discountPercent)))
-        : clientRow.discountPercent;
-      pricing = calcProcedurePricing(basePrice, { mode: 'percent', discountPercent }, extraCost);
+        body.discountPercent !== undefined
+          ? Math.min(100, Math.max(0, Math.round(body.discountPercent)))
+          : clientRow.discountPercent;
+      pricing = calcProcedurePricing(
+        basePrice,
+        { mode: 'percent', discountPercent },
+        extraCost,
+      );
     }
     const cost = pricing.cost;
     if (!intervalDays) throw new BadRequestException('Интервал обязателен');
@@ -732,7 +835,9 @@ export class CrmService {
       return row;
     });
 
-    await this.finance.syncFromProcedures(dateOnlyIso(procedureDate) ?? undefined);
+    await this.finance.syncFromProcedures(
+      dateOnlyIso(procedureDate) ?? undefined,
+    );
     return procedure;
   }
 
@@ -757,7 +862,9 @@ export class CrmService {
     if (!masterId) throw new BadRequestException('Выберите мастера');
 
     const config = await this.loadCrmConfig();
-    const master = await this.prisma.crmMaster.findFirst({ where: { id: masterId, active: true } });
+    const master = await this.prisma.crmMaster.findFirst({
+      where: { id: masterId, active: true },
+    });
     if (!master) {
       throw new BadRequestException('Выбранный мастер не найден');
     }
@@ -770,9 +877,8 @@ export class CrmService {
     await this.assertMasterSlotFree(masterId, startsAt, durationMinutes);
 
     let clientId = body.clientId?.trim();
-    let client =
-      clientId ?
-        await this.prisma.crmClient.findUnique({ where: { id: clientId } })
+    let client = clientId
+      ? await this.prisma.crmClient.findUnique({ where: { id: clientId } })
       : null;
 
     if (!client && body.newClient?.fullName?.trim()) {
@@ -785,12 +891,21 @@ export class CrmService {
     }
 
     if (!client || !clientId) {
-      throw new BadRequestException('Укажите клиента или создайте нового (ФИО)');
+      throw new BadRequestException(
+        'Укажите клиента или создайте нового (ФИО)',
+      );
     }
 
-    const sequenceNumber = Math.max(1, Math.round(Number(body.sequenceNumber ?? client.visitsCount + 1)));
+    const sequenceNumber = Math.max(
+      1,
+      Math.round(Number(body.sequenceNumber ?? client.visitsCount + 1)),
+    );
 
-    const compliance = computeIntervalCompliance(client.visitsCount, client.lastProcedureAt, startsAt);
+    const compliance = computeIntervalCompliance(
+      client.visitsCount,
+      client.lastProcedureAt,
+      startsAt,
+    );
     if (!compliance.intervalOk && !body.forceInterval) {
       throw new BadRequestException(compliance.message);
     }
@@ -937,12 +1052,19 @@ export class CrmService {
     let status: CrmClientStatus | undefined;
     if (visitStatus === CrmVisitStatus.ARRIVED) status = CrmClientStatus.BLUE;
     if (visitStatus === CrmVisitStatus.NO_SHOW) status = CrmClientStatus.BLACK;
-    if (visitStatus === CrmVisitStatus.SCHEDULED) status = CrmClientStatus.GREEN;
+    if (visitStatus === CrmVisitStatus.SCHEDULED)
+      status = CrmClientStatus.GREEN;
     if (status) {
-      await this.prisma.crmClient.update({ where: { id: appt.clientId }, data: { status } });
+      await this.prisma.crmClient.update({
+        where: { id: appt.clientId },
+        data: { status },
+      });
     }
 
-    if (visitStatus === CrmVisitStatus.CANCELED && prev.visitStatus !== CrmVisitStatus.CANCELED) {
+    if (
+      visitStatus === CrmVisitStatus.CANCELED &&
+      prev.visitStatus !== CrmVisitStatus.CANCELED
+    ) {
       await this.notifications.appointmentCanceled({
         clientName: prev.client.fullName,
         startsAt: prev.startsAt.toISOString(),
@@ -966,17 +1088,24 @@ export class CrmService {
     const prev = await this.prisma.crmAppointment.findUnique({ where: { id } });
     if (!prev) throw new NotFoundException('Запись не найдена');
 
-    const service = body.service !== undefined ? body.service.trim() : prev.service;
+    const service =
+      body.service !== undefined ? body.service.trim() : prev.service;
     if (!service) throw new BadRequestException('Услуга обязательна');
 
-    const startsAt = body.startsAt ? parseDateTime(body.startsAt) : prev.startsAt;
+    const startsAt = body.startsAt
+      ? parseDateTime(body.startsAt)
+      : prev.startsAt;
     const durationMinutes =
-      body.durationMinutes !== undefined ? normalizeDurationMinutes(body.durationMinutes) : prev.durationMinutes;
+      body.durationMinutes !== undefined
+        ? normalizeDurationMinutes(body.durationMinutes)
+        : prev.durationMinutes;
     const masterId = body.masterId?.trim() ?? prev.masterId;
     if (!masterId) throw new BadRequestException('Выберите мастера');
 
     const config = await this.loadCrmConfig();
-    const master = await this.prisma.crmMaster.findFirst({ where: { id: masterId, active: true } });
+    const master = await this.prisma.crmMaster.findFirst({
+      where: { id: masterId, active: true },
+    });
     if (!master) throw new BadRequestException('Выбранный мастер не найден');
 
     const salonId = body.salonId?.trim() ?? prev.salonId;
@@ -985,13 +1114,22 @@ export class CrmService {
     }
 
     const sequenceNumber =
-      body.sequenceNumber !== undefined ? Math.max(1, Math.round(body.sequenceNumber)) : prev.sequenceNumber;
+      body.sequenceNumber !== undefined
+        ? Math.max(1, Math.round(body.sequenceNumber))
+        : prev.sequenceNumber;
 
     await this.assertMasterSlotFree(masterId, startsAt, durationMinutes, id);
 
     return this.prisma.crmAppointment.update({
       where: { id },
-      data: { service, startsAt, durationMinutes, masterId, salonId, sequenceNumber },
+      data: {
+        service,
+        startsAt,
+        durationMinutes,
+        masterId,
+        salonId,
+        sequenceNumber,
+      },
     });
   }
 
@@ -1002,15 +1140,27 @@ export class CrmService {
     return { ok: true };
   }
 
-  async dueForRepeat(q?: string, user?: JwtUserPayload, pageRaw?: string | number, limitRaw?: string | number) {
+  async dueForRepeat(
+    q?: string,
+    user?: JwtUserPayload,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ) {
     const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const all = await this.listIntervals(q, user, 1, 500);
-    const filtered = all.items.filter((r) => r.urgency === 'overdue' || r.urgency === 'due_soon');
+    const filtered = all.items.filter(
+      (r) => r.urgency === 'overdue' || r.urgency === 'due_soon',
+    );
     const items = filtered.slice(skip, skip + limit);
     return paginatedResult(items, filtered.length, page, limit);
   }
 
-  async listIntervals(q?: string, user?: JwtUserPayload, pageRaw?: string | number, limitRaw?: string | number) {
+  async listIntervals(
+    q?: string,
+    user?: JwtUserPayload,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ) {
     const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const where: Record<string, unknown> = {
       procedures: { some: {} },
@@ -1040,7 +1190,10 @@ export class CrmService {
     const items = clients
       .map((c) => {
         const lastProc = c.procedures[0] ?? null;
-        const nextAt = this.resolveRecommendedNext(c.recommendedNextAt, lastProc);
+        const nextAt = this.resolveRecommendedNext(
+          c.recommendedNextAt,
+          lastProc,
+        );
         const daysUntilNext = nextAt ? daysBetween(today, nextAt) : null;
         let urgency: 'overdue' | 'due_soon' | 'ok' | 'unknown' = 'unknown';
         if (daysUntilNext !== null) {
@@ -1062,7 +1215,9 @@ export class CrmService {
           urgency,
           requiresRepeatContact: c.requiresRepeatContact,
           minIntervalDays: minIntervalDaysForSequence(c.visitsCount + 1),
-          daysSinceLast: c.lastProcedureAt ? daysBetween(c.lastProcedureAt, today) : null,
+          daysSinceLast: c.lastProcedureAt
+            ? daysBetween(c.lastProcedureAt, today)
+            : null,
         };
       })
       .sort((a, b) => {
@@ -1074,7 +1229,11 @@ export class CrmService {
     return paginatedResult(items, total, page, limit);
   }
 
-  async lostClients(days = 90, pageRaw?: string | number, limitRaw?: string | number) {
+  async lostClients(
+    days = 90,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ) {
     const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
     const edge = new Date();
     edge.setUTCDate(edge.getUTCDate() - Math.max(1, Math.round(days)));
@@ -1096,10 +1255,16 @@ export class CrmService {
 
   async analytics() {
     const now = new Date();
-    const startDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const startDay = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
     const startWeek = new Date(startDay);
-    startWeek.setUTCDate(startWeek.getUTCDate() - ((startWeek.getUTCDay() + 6) % 7));
-    const startMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    startWeek.setUTCDate(
+      startWeek.getUTCDate() - ((startWeek.getUTCDay() + 6) % 7),
+    );
+    const startMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
     const startYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
 
     const [
@@ -1115,15 +1280,35 @@ export class CrmService {
       yearRevenue,
     ] = await Promise.all([
       this.prisma.crmClient.count(),
-      this.prisma.crmClient.count({ where: { createdAt: { gte: startMonth } } }),
+      this.prisma.crmClient.count({
+        where: { createdAt: { gte: startMonth } },
+      }),
       this.prisma.crmAppointment.count(),
-      this.prisma.crmAppointment.count({ where: { visitStatus: CrmVisitStatus.ARRIVED } }),
-      this.prisma.crmAppointment.count({ where: { visitStatus: CrmVisitStatus.CANCELED } }),
-      this.prisma.crmAppointment.count({ where: { visitStatus: CrmVisitStatus.NO_SHOW } }),
-      this.prisma.crmProcedure.aggregate({ _sum: { cost: true }, where: { procedureDate: { gte: startDay } } }),
-      this.prisma.crmProcedure.aggregate({ _sum: { cost: true }, where: { procedureDate: { gte: startWeek } } }),
-      this.prisma.crmProcedure.aggregate({ _sum: { cost: true }, where: { procedureDate: { gte: startMonth } } }),
-      this.prisma.crmProcedure.aggregate({ _sum: { cost: true }, where: { procedureDate: { gte: startYear } } }),
+      this.prisma.crmAppointment.count({
+        where: { visitStatus: CrmVisitStatus.ARRIVED },
+      }),
+      this.prisma.crmAppointment.count({
+        where: { visitStatus: CrmVisitStatus.CANCELED },
+      }),
+      this.prisma.crmAppointment.count({
+        where: { visitStatus: CrmVisitStatus.NO_SHOW },
+      }),
+      this.prisma.crmProcedure.aggregate({
+        _sum: { cost: true },
+        where: { procedureDate: { gte: startDay } },
+      }),
+      this.prisma.crmProcedure.aggregate({
+        _sum: { cost: true },
+        where: { procedureDate: { gte: startWeek } },
+      }),
+      this.prisma.crmProcedure.aggregate({
+        _sum: { cost: true },
+        where: { procedureDate: { gte: startMonth } },
+      }),
+      this.prisma.crmProcedure.aggregate({
+        _sum: { cost: true },
+        where: { procedureDate: { gte: startYear } },
+      }),
     ]);
 
     const perMaster = await this.prisma.crmProcedure.groupBy({
@@ -1134,9 +1319,11 @@ export class CrmService {
     });
 
     const masterIds = perMaster.map((p) => p.masterId!).filter(Boolean);
-    const masters =
-      masterIds.length ?
-        await this.prisma.crmMaster.findMany({ where: { id: { in: masterIds } }, select: { id: true, name: true } })
+    const masters = masterIds.length
+      ? await this.prisma.crmMaster.findMany({
+          where: { id: { in: masterIds } },
+          select: { id: true, name: true },
+        })
       : [];
     const nameMap = new Map(masters.map((m) => [m.id, m.name]));
 

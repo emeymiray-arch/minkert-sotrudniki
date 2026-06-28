@@ -3,7 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LOG_DIR="$ROOT/backups"
+# shellcheck source=backup-paths.sh
+source "$ROOT/scripts/backup-paths.sh"
+migrate_legacy_backups
+BACKUP_DIR="$(backup_root)"
+LOG_DIR="$BACKUP_DIR"
 TEST_DB="${RESTORE_TEST_DB:-minkert_restore_test}"
 ENV_FILE="$ROOT/backend/.env"
 

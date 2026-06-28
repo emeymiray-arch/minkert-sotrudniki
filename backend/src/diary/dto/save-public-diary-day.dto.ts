@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEnum, IsString, MaxLength, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { DiaryLineState } from '@prisma/client';
 
 export class SavePublicDiaryLineDto {

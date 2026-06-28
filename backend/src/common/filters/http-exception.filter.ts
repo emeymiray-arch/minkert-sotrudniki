@@ -24,9 +24,11 @@ export class SafeHttpExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const body = exception.getResponse();
       const payload =
-        typeof body === 'string' ? { message: body }
-        : body && typeof body === 'object' ? body
-        : { message: exception.message };
+        typeof body === 'string'
+          ? { message: body }
+          : body && typeof body === 'object'
+            ? body
+            : { message: exception.message };
 
       if (status >= 500) {
         this.logger.error(
@@ -49,7 +51,9 @@ export class SafeHttpExceptionFilter implements ExceptionFilter {
 
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: isProd ? 'Внутренняя ошибка сервера' : (exception as Error)?.message ?? 'Error',
+      message: isProd
+        ? 'Внутренняя ошибка сервера'
+        : ((exception as Error)?.message ?? 'Error'),
       requestId,
     });
   }

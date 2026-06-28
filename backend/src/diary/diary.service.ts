@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DiaryLineState, UserRole } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
@@ -9,11 +14,13 @@ const MAX_LINES = 15;
 
 function parseDayParam(raw: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw?.trim() ?? '');
-  if (!m) throw new BadRequestException('Дата должна быть в формате YYYY-MM-DD');
+  if (!m)
+    throw new BadRequestException('Дата должна быть в формате YYYY-MM-DD');
   const y = Number(m[1]);
   const mo = Number(m[2]);
   const d = Number(m[3]);
-  if (mo < 1 || mo > 12 || d < 1 || d > 31) throw new BadRequestException('Некорректная дата');
+  if (mo < 1 || mo > 12 || d < 1 || d > 31)
+    throw new BadRequestException('Некорректная дата');
   return new Date(Date.UTC(y, mo - 1, d, 12, 0, 0, 0));
 }
 
@@ -101,7 +108,11 @@ export class DiaryService {
     };
   }
 
-  async savePublicDay(token: string, dateRaw: string, lines: { label: string; state: DiaryLineState }[]) {
+  async savePublicDay(
+    token: string,
+    dateRaw: string,
+    lines: { label: string; state: DiaryLineState }[],
+  ) {
     const emp = await this.prisma.employee.findFirst({
       where: { diaryToken: token },
       select: { id: true },
@@ -157,13 +168,22 @@ export class DiaryService {
     return { ok: true, date: isoDate(date) };
   }
 
-  async listDaysForEmployee(employeeId: string, fromRaw: string, toRaw: string, user?: JwtUserPayload) {
-    if (user?.role === UserRole.VIEWER && user.linkedEmployeeId !== employeeId) {
+  async listDaysForEmployee(
+    employeeId: string,
+    fromRaw: string,
+    toRaw: string,
+    user?: JwtUserPayload,
+  ) {
+    if (
+      user?.role === UserRole.VIEWER &&
+      user.linkedEmployeeId !== employeeId
+    ) {
       throw new ForbiddenException('Нет доступа к дневнику этого сотрудника');
     }
     const from = parseDayParam(fromRaw);
     const to = parseDayParam(toRaw);
-    if (from.getTime() > to.getTime()) throw new BadRequestException('from позже to');
+    if (from.getTime() > to.getTime())
+      throw new BadRequestException('from позже to');
     const maxMs = 90 * 86400000;
     if (to.getTime() - from.getTime() > maxMs) {
       throw new BadRequestException('Интервал не более 90 дней');

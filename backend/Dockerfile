@@ -8,6 +8,7 @@ RUN npm ci
 
 COPY prisma ./prisma
 COPY prisma.config.ts ./prisma.config.ts
+COPY scripts ./scripts
 COPY src ./src
 COPY tsconfig*.json nest-cli.json ./
 
@@ -18,4 +19,4 @@ ENV PORT=3000
 
 EXPOSE 3000
 # Миграции при старте (удобно на PaaS без отдельного job)
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
+CMD ["sh", "scripts/start-production.sh"]

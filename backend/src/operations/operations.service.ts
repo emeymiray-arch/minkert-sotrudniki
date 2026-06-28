@@ -30,7 +30,9 @@ import {
 function parseDayParam(raw?: string): Date {
   if (!raw?.trim()) {
     const n = new Date();
-    return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+    return new Date(
+      Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()),
+    );
   }
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
   if (!m) throw new BadRequestException('Дата: YYYY-MM-DD');
@@ -79,16 +81,34 @@ export class OperationsService {
 
   async listBlocks() {
     await this.ensureDefaults();
-    return this.prisma.opsBlockConfig.findMany({ orderBy: { sortOrder: 'asc' } });
+    return this.prisma.opsBlockConfig.findMany({
+      orderBy: { sortOrder: 'asc' },
+    });
   }
 
-  async updateBlock(block: OpsTimeBlock, data: Partial<{ title: string; timeStart: string; timeEnd: string; enabled: boolean; sortOrder: number }>, user?: JwtUserPayload) {
+  async updateBlock(
+    block: OpsTimeBlock,
+    data: Partial<{
+      title: string;
+      timeStart: string;
+      timeEnd: string;
+      enabled: boolean;
+      sortOrder: number;
+    }>,
+    user?: JwtUserPayload,
+  ) {
     await this.ensureDefaults();
     const row = await this.prisma.opsBlockConfig.update({
       where: { block },
       data,
     });
-    await this.log(user, 'block', block, 'update', data as Prisma.InputJsonValue);
+    await this.log(
+      user,
+      'block',
+      block,
+      'update',
+      data as Prisma.InputJsonValue,
+    );
     return row;
   }
 
@@ -101,10 +121,15 @@ export class OperationsService {
   }
 
   private categoryAnchorDate(block: OpsTimeBlock, forDate: Date): Date {
-    return block === OpsTimeBlock.WEEK ? startUtcWeekMonday(forDate) : this.persistentTaskDate();
+    return block === OpsTimeBlock.WEEK
+      ? startUtcWeekMonday(forDate)
+      : this.persistentTaskDate();
   }
 
-  private taskWhereForBlock(block: OpsTimeBlock, forDate: Date): Prisma.OpsTaskWhereInput {
+  private taskWhereForBlock(
+    block: OpsTimeBlock,
+    forDate: Date,
+  ): Prisma.OpsTaskWhereInput {
     if (block === OpsTimeBlock.WEEK) {
       const mon = startUtcWeekMonday(forDate);
       return { block, forDate: { gte: mon, lte: addUtcDays(mon, 6) } };
@@ -149,14 +174,23 @@ export class OperationsService {
     await this.prisma.opsTask.updateMany({
       where: {
         dueAt: { not: null, lt: now },
-        status: { in: [OpsTaskStatus.PENDING, OpsTaskStatus.NOT_DONE, OpsTaskStatus.PARTIAL, OpsTaskStatus.NEEDS_ATTENTION] },
+        status: {
+          in: [
+            OpsTaskStatus.PENDING,
+            OpsTaskStatus.NOT_DONE,
+            OpsTaskStatus.PARTIAL,
+            OpsTaskStatus.NEEDS_ATTENTION,
+          ],
+        },
       },
       data: { status: OpsTaskStatus.OVERDUE },
     });
   }
 
   async ensureCategoriesForBoard(block: OpsTimeBlock, anchor: Date) {
-    const count = await this.prisma.opsCategory.count({ where: { block, forDate: anchor } });
+    const count = await this.prisma.opsCategory.count({
+      where: { block, forDate: anchor },
+    });
     if (count > 0) return;
     for (let i = 0; i < OPS_DEFAULT_CATEGORY_TITLES.length; i++) {
       await this.prisma.opsCategory.create({
@@ -191,18 +225,25 @@ export class OperationsService {
     });
     const entries = rawTasks.length
       ? await this.prisma.opsTaskCheckEntry.findMany({
-          where: { taskId: { in: rawTasks.map((t) => t.id) }, recordDate: forDate },
+          where: {
+            taskId: { in: rawTasks.map((t) => t.id) },
+            recordDate: forDate,
+          },
         })
       : [];
 
     const tasks = [...rawTasks]
       .sort((a, b) => {
-        const la = a.categoryLabel?.trim() || a.category?.title?.trim() || 'яяя';
-        const lb = b.categoryLabel?.trim() || b.category?.title?.trim() || 'яяя';
+        const la =
+          a.categoryLabel?.trim() || a.category?.title?.trim() || 'яяя';
+        const lb =
+          b.categoryLabel?.trim() || b.category?.title?.trim() || 'яяя';
         if (la !== lb) return la.localeCompare(lb, 'ru');
         return a.sortOrder - b.sortOrder;
       })
-      .map((t) => this.formatTaskForBoard(t, forDate, activeEmployees, entries));
+      .map((t) =>
+        this.formatTaskForBoard(t, forDate, activeEmployees, entries),
+      );
 
     return {
       forDate: isoDate(forDate),
@@ -220,12 +261,18 @@ export class OperationsService {
     opts?: { resetTaskStatus?: boolean; onlyIncomplete?: boolean },
   ) {
     if (block === OpsTimeBlock.WEEK) {
-      throw new BadRequestException('Для блока «Неделя» перенос на завтра недоступен');
+      throw new BadRequestException(
+        'Для блока «Неделя» перенос на завтра недоступен',
+      );
     }
     const fromDate = parseDayParam(fromDateRaw);
-    const toDate = toDateRaw ? parseDayParam(toDateRaw) : addUtcDays(fromDate, 1);
+    const toDate = toDateRaw
+      ? parseDayParam(toDateRaw)
+      : addUtcDays(fromDate, 1);
     if (toDate.getTime() <= fromDate.getTime()) {
-      throw new BadRequestException('Дата «куда» должна быть позже даты «откуда»');
+      throw new BadRequestException(
+        'Дата «куда» должна быть позже даты «откуда»',
+      );
     }
 
     await this.migrateBlockToPersistentTasks(block);
@@ -318,7 +365,11 @@ export class OperationsService {
     if (opts?.resetTaskStatus !== false) {
       const reset = await this.prisma.opsTask.updateMany({
         where: { id: { in: taskIds } },
-        data: { status: OpsTaskStatus.PENDING, markedAt: null, markedByName: '' },
+        data: {
+          status: OpsTaskStatus.PENDING,
+          markedAt: null,
+          markedByName: '',
+        },
       });
       tasksReset = reset.count;
     }
@@ -341,9 +392,12 @@ export class OperationsService {
     };
   }
 
-  private effectiveCheckType(task: { checkType: OpsTaskCheckType; title: string }): OpsTaskCheckType {
-    return task.checkType === OpsTaskCheckType.NONE ?
-        inferCheckTypeFromTitle(task.title)
+  private effectiveCheckType(task: {
+    checkType: OpsTaskCheckType;
+    title: string;
+  }): OpsTaskCheckType {
+    return task.checkType === OpsTaskCheckType.NONE
+      ? inferCheckTypeFromTitle(task.title)
       : task.checkType;
   }
 
@@ -362,7 +416,8 @@ export class OperationsService {
   ) {
     const checkType = this.effectiveCheckType(task);
     const taskEntries = entries.filter((e) => e.taskId === task.id);
-    const categoryLabel = task.categoryLabel?.trim() || task.category?.title?.trim() || '';
+    const categoryLabel =
+      task.categoryLabel?.trim() || task.category?.title?.trim() || '';
     return {
       ...task,
       categoryLabel,
@@ -405,8 +460,17 @@ export class OperationsService {
     id: string,
     body: Partial<{ title: string; pinned: boolean; sortOrder: number }>,
   ) {
-    const cat = await this.prisma.opsCategory.update({ where: { id }, data: body });
-    await this.log(user, 'category', id, 'update', body as Prisma.InputJsonValue);
+    const cat = await this.prisma.opsCategory.update({
+      where: { id },
+      data: body,
+    });
+    await this.log(
+      user,
+      'category',
+      id,
+      'update',
+      body as Prisma.InputJsonValue,
+    );
     return cat;
   }
 
@@ -416,7 +480,10 @@ export class OperationsService {
     return { ok: true };
   }
 
-  async reorderCategories(user: JwtUserPayload | undefined, orderedIds: string[]) {
+  async reorderCategories(
+    user: JwtUserPayload | undefined,
+    orderedIds: string[],
+  ) {
     await Promise.all(
       orderedIds.map((id, sortOrder) =>
         this.prisma.opsCategory.update({ where: { id }, data: { sortOrder } }),
@@ -486,7 +553,10 @@ export class OperationsService {
       },
       include: { assignee: { select: { id: true, name: true } } },
     });
-    await this.log(user, 'task', task.id, 'create', { title: task.title, block: task.block });
+    await this.log(user, 'task', task.id, 'create', {
+      title: task.title,
+      block: task.block,
+    });
     return task;
   }
 
@@ -512,21 +582,31 @@ export class OperationsService {
     const data: Prisma.OpsTaskUpdateInput = {};
     if (body.title !== undefined) data.title = body.title.trim();
     if (body.checkType !== undefined) data.checkType = body.checkType;
-    else if (body.title !== undefined && prev.checkType === OpsTaskCheckType.NONE) {
+    else if (
+      body.title !== undefined &&
+      prev.checkType === OpsTaskCheckType.NONE
+    ) {
       data.checkType = inferCheckTypeFromTitle(body.title);
     }
-    if (body.description !== undefined) data.description = body.description.trim();
-    if (body.dueAt !== undefined) data.dueAt = body.dueAt ? new Date(body.dueAt) : null;
+    if (body.description !== undefined)
+      data.description = body.description.trim();
+    if (body.dueAt !== undefined)
+      data.dueAt = body.dueAt ? new Date(body.dueAt) : null;
     if (body.assigneeId !== undefined) {
-      data.assignee = body.assigneeId ? { connect: { id: body.assigneeId } } : { disconnect: true };
+      data.assignee = body.assigneeId
+        ? { connect: { id: body.assigneeId } }
+        : { disconnect: true };
     }
     if (body.pinned !== undefined) data.pinned = body.pinned;
     if (body.block !== undefined) data.block = body.block;
     if (body.forDate !== undefined) data.forDate = parseDayParam(body.forDate);
     if (body.categoryId !== undefined) {
-      data.category = body.categoryId ? { connect: { id: body.categoryId } } : { disconnect: true };
+      data.category = body.categoryId
+        ? { connect: { id: body.categoryId } }
+        : { disconnect: true };
     }
-    if (body.categoryLabel !== undefined) data.categoryLabel = body.categoryLabel.trim();
+    if (body.categoryLabel !== undefined)
+      data.categoryLabel = body.categoryLabel.trim();
     if (body.status !== undefined) {
       data.status = body.status;
       data.markedAt = new Date();
@@ -535,7 +615,11 @@ export class OperationsService {
     const task = await this.prisma.opsTask.update({
       where: { id },
       data,
-      include: { assignee: { select: { id: true, name: true } }, comments: true, notes: true },
+      include: {
+        assignee: { select: { id: true, name: true } },
+        comments: true,
+        notes: true,
+      },
     });
     await this.log(user, 'task', id, 'update', body as Prisma.InputJsonValue);
     return task;
@@ -575,11 +659,20 @@ export class OperationsService {
     });
   }
 
-  async moveTask(user: JwtUserPayload | undefined, id: string, block: OpsTimeBlock, forDate?: string) {
+  async moveTask(
+    user: JwtUserPayload | undefined,
+    id: string,
+    block: OpsTimeBlock,
+    forDate?: string,
+  ) {
     return this.updateTask(user, id, { block, forDate });
   }
 
-  async addComment(user: JwtUserPayload | undefined, taskId: string, body: string) {
+  async addComment(
+    user: JwtUserPayload | undefined,
+    taskId: string,
+    body: string,
+  ) {
     const c = await this.prisma.opsTaskComment.create({
       data: {
         taskId,
@@ -592,7 +685,11 @@ export class OperationsService {
     return c;
   }
 
-  async addNote(user: JwtUserPayload | undefined, taskId: string, body: string) {
+  async addNote(
+    user: JwtUserPayload | undefined,
+    taskId: string,
+    body: string,
+  ) {
     const n = await this.prisma.opsTaskNote.create({
       data: { taskId, body: body.trim() },
     });
@@ -629,9 +726,15 @@ export class OperationsService {
     });
     const total = tasks.length;
     const done = tasks.filter((t) => t.status === OpsTaskStatus.DONE).length;
-    const notDone = tasks.filter((t) => t.status === OpsTaskStatus.NOT_DONE).length;
-    const overdue = tasks.filter((t) => t.status === OpsTaskStatus.OVERDUE).length;
-    const needsAttention = tasks.filter((t) => t.status === OpsTaskStatus.NEEDS_ATTENTION).length;
+    const notDone = tasks.filter(
+      (t) => t.status === OpsTaskStatus.NOT_DONE,
+    ).length;
+    const overdue = tasks.filter(
+      (t) => t.status === OpsTaskStatus.OVERDUE,
+    ).length;
+    const needsAttention = tasks.filter(
+      (t) => t.status === OpsTaskStatus.NEEDS_ATTENTION,
+    ).length;
     const completionPercent = total ? Math.round((done / total) * 100) : 0;
 
     const violationsToday = await this.prisma.opsViolation.findMany({
@@ -679,9 +782,8 @@ export class OperationsService {
       having: { id: { _count: { gt: 2 } } },
     });
     const repeatIds = repeatViolators.map((r) => r.employeeId);
-    const repeatEmployees =
-      repeatIds.length ?
-        await this.prisma.employee.findMany({
+    const repeatEmployees = repeatIds.length
+      ? await this.prisma.employee.findMany({
           where: { id: { in: repeatIds } },
           select: { id: true, name: true },
         })
@@ -689,7 +791,14 @@ export class OperationsService {
 
     return {
       forDate: isoDate(forDate),
-      stats: { total, done, notDone, overdue, needsAttention, completionPercent },
+      stats: {
+        total,
+        done,
+        notDone,
+        overdue,
+        needsAttention,
+        completionPercent,
+      },
       urgentTasks: urgent.slice(0, 8),
       violationsToday,
       missedReports,
@@ -751,23 +860,41 @@ export class OperationsService {
       create: { employeeId, ...data },
       update: data,
     });
-    await this.log(user, 'staff', employeeId, 'profile_update', data as Prisma.InputJsonValue);
+    await this.log(
+      user,
+      'staff',
+      employeeId,
+      'profile_update',
+      data as Prisma.InputJsonValue,
+    );
     return row;
   }
 
   async listViolations(fromRaw?: string, toRaw?: string) {
     const to = parseDayParam(toRaw);
-    const from = fromRaw ? parseDayParam(fromRaw) : new Date(to.getTime() - 30 * 86400000);
+    const from = fromRaw
+      ? parseDayParam(fromRaw)
+      : new Date(to.getTime() - 30 * 86400000);
     return this.prisma.opsViolation.findMany({
-      where: { occurredAt: { gte: from, lte: new Date(to.getTime() + 86400000) } },
+      where: {
+        occurredAt: { gte: from, lte: new Date(to.getTime() + 86400000) },
+      },
       orderBy: { occurredAt: 'desc' },
-      include: { employee: { select: { id: true, name: true, position: true } } },
+      include: {
+        employee: { select: { id: true, name: true, position: true } },
+      },
     });
   }
 
   async createViolation(
     user: JwtUserPayload | undefined,
-    body: { employeeId: string; type?: OpsViolationType; description?: string; occurredAt?: string; warned?: boolean },
+    body: {
+      employeeId: string;
+      type?: OpsViolationType;
+      description?: string;
+      occurredAt?: string;
+      warned?: boolean;
+    },
   ) {
     const v = await this.prisma.opsViolation.create({
       data: {
@@ -779,7 +906,9 @@ export class OperationsService {
       },
       include: { employee: { select: { id: true, name: true } } },
     });
-    const prof = await this.prisma.opsStaffProfile.findUnique({ where: { employeeId: body.employeeId } });
+    const prof = await this.prisma.opsStaffProfile.findUnique({
+      where: { employeeId: body.employeeId },
+    });
     if (prof) {
       await this.prisma.opsStaffProfile.update({
         where: { employeeId: body.employeeId },
@@ -789,7 +918,13 @@ export class OperationsService {
         },
       });
     }
-    await this.log(user, 'violation', v.id, 'create', body as Prisma.InputJsonValue);
+    await this.log(
+      user,
+      'violation',
+      v.id,
+      'create',
+      body as Prisma.InputJsonValue,
+    );
     return v;
   }
 
@@ -805,7 +940,10 @@ export class OperationsService {
     });
   }
 
-  async createProblem(user: JwtUserPayload | undefined, body: { title: string; description?: string }) {
+  async createProblem(
+    user: JwtUserPayload | undefined,
+    body: { title: string; description?: string },
+  ) {
     const row = await this.prisma.opsProblem.create({
       data: {
         title: body.title.trim(),
@@ -823,13 +961,20 @@ export class OperationsService {
   ) {
     const data: Prisma.OpsProblemUpdateInput = {};
     if (body.title !== undefined) data.title = body.title.trim();
-    if (body.description !== undefined) data.description = body.description.trim();
+    if (body.description !== undefined)
+      data.description = body.description.trim();
     if (body.resolved !== undefined) {
       data.resolved = body.resolved;
       data.resolvedAt = body.resolved ? new Date() : null;
     }
     const row = await this.prisma.opsProblem.update({ where: { id }, data });
-    await this.log(user, 'problem', row.id, 'update', body as Prisma.InputJsonValue);
+    await this.log(
+      user,
+      'problem',
+      row.id,
+      'update',
+      body as Prisma.InputJsonValue,
+    );
     return row;
   }
 
@@ -844,7 +989,9 @@ export class OperationsService {
     return this.prisma.opsContentReview.findMany({
       where: { reviewDate },
       orderBy: { createdAt: 'desc' },
-      include: { employee: { select: { id: true, name: true, position: true } } },
+      include: {
+        employee: { select: { id: true, name: true, position: true } },
+      },
     });
   }
 
@@ -933,12 +1080,17 @@ export class OperationsService {
 
   async getSettings() {
     await this.ensureDefaults();
-    return this.prisma.opsSettings.findUniqueOrThrow({ where: { id: 'default' } });
+    return this.prisma.opsSettings.findUniqueOrThrow({
+      where: { id: 'default' },
+    });
   }
 
   async updateSettings(
     user: JwtUserPayload | undefined,
-    data: { googleFormMappings?: Prisma.InputJsonValue; formsWebhookNote?: string },
+    data: {
+      googleFormMappings?: Prisma.InputJsonValue;
+      formsWebhookNote?: string;
+    },
   ) {
     const row = await this.prisma.opsSettings.update({
       where: { id: 'default' },
@@ -950,7 +1102,9 @@ export class OperationsService {
 
   async analyticsSummary(dateRaw?: string) {
     const forDate = parseDayParam(dateRaw);
-    const monthStart = new Date(Date.UTC(forDate.getUTCFullYear(), forDate.getUTCMonth(), 1));
+    const monthStart = new Date(
+      Date.UTC(forDate.getUTCFullYear(), forDate.getUTCMonth(), 1),
+    );
     const tasks = await this.prisma.opsTask.findMany({
       where: { forDate: { gte: monthStart, lte: forDate } },
     });
@@ -996,7 +1150,9 @@ export class OperationsService {
   }
 
   async getCheckSheet(taskId: string, dateRaw?: string) {
-    const task = await this.prisma.opsTask.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.opsTask.findUnique({
+      where: { id: taskId },
+    });
     if (!task) throw new NotFoundException('Задача не найдена');
     const recordDate = parseDayParam(dateRaw ?? isoDate(task.forDate));
     const checkType = this.effectiveCheckType(task);
@@ -1043,7 +1199,9 @@ export class OperationsService {
       flagViolation?: boolean;
     }>,
   ) {
-    const task = await this.prisma.opsTask.findUnique({ where: { id: taskId } });
+    const task = await this.prisma.opsTask.findUnique({
+      where: { id: taskId },
+    });
     if (!task) throw new NotFoundException('Задача не найдена');
     const recordDate = parseDayParam(dateRaw ?? isoDate(task.forDate));
     const checkType = this.effectiveCheckType(task);
@@ -1123,7 +1281,10 @@ export class OperationsService {
       }
     }
 
-    await this.log(user, 'task', taskId, 'check_sheet_save', { recordDate: isoDate(recordDate), rows: rows.length });
+    await this.log(user, 'task', taskId, 'check_sheet_save', {
+      recordDate: isoDate(recordDate),
+      rows: rows.length,
+    });
     return this.getCheckSheet(taskId, isoDate(recordDate));
   }
 
@@ -1134,7 +1295,9 @@ export class OperationsService {
     checkType?: OpsTaskCheckType;
   }) {
     const to = parseDayParam(opts.to);
-    const from = opts.from ? parseDayParam(opts.from) : new Date(to.getTime() - 30 * 86400000);
+    const from = opts.from
+      ? parseDayParam(opts.from)
+      : new Date(to.getTime() - 30 * 86400000);
     const where: Prisma.OpsTaskCheckEntryWhereInput = {
       recordDate: { gte: from, lte: to },
     };
@@ -1145,13 +1308,16 @@ export class OperationsService {
       orderBy: [{ recordDate: 'desc' }, { updatedAt: 'desc' }],
       include: {
         employee: { select: { id: true, name: true, position: true } },
-        task: { select: { id: true, title: true, block: true, checkType: true } },
+        task: {
+          select: { id: true, title: true, block: true, checkType: true },
+        },
       },
     });
 
-    const filtered =
-      opts.checkType ?
-        entries.filter((e) => this.effectiveCheckType(e.task) === opts.checkType)
+    const filtered = opts.checkType
+      ? entries.filter(
+          (e) => this.effectiveCheckType(e.task) === opts.checkType,
+        )
       : entries;
 
     return {

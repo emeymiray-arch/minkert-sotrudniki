@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,7 +12,9 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    return this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
   }
 
   async findById(id: string) {
@@ -34,13 +40,18 @@ export class UsersService {
   ) {
     const normalized = email.toLowerCase().trim();
     const existing = await this.findByEmail(normalized);
-    if (existing) throw new ConflictException('Пользователь с таким email уже существует');
+    if (existing)
+      throw new ConflictException('Пользователь с таким email уже существует');
     const link =
-      linkedEmployeeId === undefined || linkedEmployeeId === null || linkedEmployeeId === '' ?
-        null
-      : linkedEmployeeId;
+      linkedEmployeeId === undefined ||
+      linkedEmployeeId === null ||
+      linkedEmployeeId === ''
+        ? null
+        : linkedEmployeeId;
     if (link) {
-      const emp = await this.prisma.employee.findUnique({ where: { id: link } });
+      const emp = await this.prisma.employee.findUnique({
+        where: { id: link },
+      });
       if (!emp) throw new NotFoundException('Сотрудник для привязки не найден');
     }
     const passwordHash = await bcrypt.hash(password, 10);
@@ -103,17 +114,28 @@ export class UsersService {
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 10);
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.linkedEmployeeId !== undefined) {
-      const link = dto.linkedEmployeeId === '' || dto.linkedEmployeeId === null ? null : dto.linkedEmployeeId;
+      const link =
+        dto.linkedEmployeeId === '' || dto.linkedEmployeeId === null
+          ? null
+          : dto.linkedEmployeeId;
       if (link) {
-        const emp = await this.prisma.employee.findUnique({ where: { id: link } });
-        if (!emp) throw new NotFoundException('Сотрудник для привязки не найден');
+        const emp = await this.prisma.employee.findUnique({
+          where: { id: link },
+        });
+        if (!emp)
+          throw new NotFoundException('Сотрудник для привязки не найден');
       }
       data.linkedEmployeeId = link;
     }
     if (dto.linkedCrmMasterId !== undefined) {
-      const link = dto.linkedCrmMasterId === '' || dto.linkedCrmMasterId === null ? null : dto.linkedCrmMasterId;
+      const link =
+        dto.linkedCrmMasterId === '' || dto.linkedCrmMasterId === null
+          ? null
+          : dto.linkedCrmMasterId;
       if (link) {
-        const master = await this.prisma.crmMaster.findUnique({ where: { id: link } });
+        const master = await this.prisma.crmMaster.findUnique({
+          where: { id: link },
+        });
         if (!master) throw new NotFoundException('Мастер CRM не найден');
       }
       data.linkedCrmMasterId = link;
@@ -133,10 +155,15 @@ export class UsersService {
     });
   }
 
-  async updateUserLinkedEmployee(userId: string, linkedEmployeeId: string | null) {
+  async updateUserLinkedEmployee(
+    userId: string,
+    linkedEmployeeId: string | null,
+  ) {
     await this.requireById(userId);
     if (linkedEmployeeId) {
-      const emp = await this.prisma.employee.findUnique({ where: { id: linkedEmployeeId } });
+      const emp = await this.prisma.employee.findUnique({
+        where: { id: linkedEmployeeId },
+      });
       if (!emp) throw new NotFoundException('Сотрудник для привязки не найден');
     }
     return this.prisma.user.update({

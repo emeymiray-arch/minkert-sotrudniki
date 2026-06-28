@@ -4,7 +4,11 @@ import { PublicEmployeeTasksController } from './public-employee-tasks.controlle
 import { TasksService } from './tasks.service';
 
 @Module({
-  controllers: [EmployeeTasksController, TasksController, PublicEmployeeTasksController],
+  controllers: [
+    EmployeeTasksController,
+    TasksController,
+    PublicEmployeeTasksController,
+  ],
   providers: [TasksService],
   exports: [TasksService],
 })

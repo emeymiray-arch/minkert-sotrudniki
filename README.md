@@ -7,6 +7,13 @@
 - `backend` — NestJS + Prisma + PostgreSQL, JWT + refresh-токены, роли ADMIN / MANAGER / VIEWER  
 - `frontend` — React + TypeScript + Tailwind + Radix + Framer Motion + Recharts + TanStack Query + Sonner
 
+### Документация
+
+- `OWNER_ACTIONS.md` — **что сделать вам** (бэкапы, Sentry, деплой)
+- `RECOVERY.md` — восстановление после сбоя (подключить базу → всё подтянется)
+- `RUNBOOK.md` — эксплуатация и инциденты
+- `DEPLOY.md`, `SECURITY.md`, `OPTIMIZATION.md`
+
 ### Запуск локально
 
 1. **База PostgreSQL** (нужна любая из опций ниже):

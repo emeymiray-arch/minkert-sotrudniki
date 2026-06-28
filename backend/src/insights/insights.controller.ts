@@ -29,7 +29,9 @@ export class InsightsController {
 
   @Patch('plan')
   @Roles(UserRole.ADMIN)
-  setPlan(@Body() body: { month: string; revenuePlan?: number; clientPlan?: number }) {
+  setPlan(
+    @Body() body: { month: string; revenuePlan?: number; clientPlan?: number },
+  ) {
     return this.insights.setPlan(body.month, body);
   }
 
@@ -60,7 +62,10 @@ export class InsightsController {
 
   @Get('employees/overviews')
   employeeOverviews(@Query('ids') ids?: string) {
-    const list = (ids ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const list = (ids ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     return this.insights.batchEmployeeOverviews(list);
   }
 }

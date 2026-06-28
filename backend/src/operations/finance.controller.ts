@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { OperationsFinanceService } from './operations-finance.service';
@@ -10,7 +19,10 @@ export class FinanceController {
   constructor(private readonly finance: OperationsFinanceService) {}
 
   @Get('table')
-  table(@Query('period') period: FinancePeriod, @Query('anchor') anchor?: string) {
+  table(
+    @Query('period') period: FinancePeriod,
+    @Query('anchor') anchor?: string,
+  ) {
     const p = period ?? 'month';
     return this.finance.getTable(p, anchor);
   }

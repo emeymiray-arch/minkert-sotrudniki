@@ -18,9 +18,11 @@ export function normalizeCrmConfig(raw: {
   salons?: unknown;
   masterEmployeeIds?: unknown;
 }): CrmWorkspaceConfig {
-  const salons = Array.isArray(raw.salons) ?
-      raw.salons
-        .filter((s): s is CrmSalon => Boolean(s && typeof s === 'object' && 'id' in s))
+  const salons = Array.isArray(raw.salons)
+    ? raw.salons
+        .filter((s): s is CrmSalon =>
+          Boolean(s && typeof s === 'object' && 'id' in s),
+        )
         .map((s) => ({
           id: String((s as CrmSalon).id),
           name: String((s as CrmSalon).name ?? ''),
@@ -28,9 +30,8 @@ export function normalizeCrmConfig(raw: {
         }))
     : [...DEFAULT_CRM_SALONS];
 
-  const masterEmployeeIds =
-    Array.isArray(raw.masterEmployeeIds) ?
-      raw.masterEmployeeIds.map((id) => String(id)).filter(Boolean)
+  const masterEmployeeIds = Array.isArray(raw.masterEmployeeIds)
+    ? raw.masterEmployeeIds.map((id) => String(id)).filter(Boolean)
     : [];
 
   return {

@@ -47,7 +47,14 @@ export class OperationsController {
   @Patch('blocks/:block')
   updateBlock(
     @Param('block') block: OpsTimeBlock,
-    @Body() body: { title?: string; timeStart?: string; timeEnd?: string; enabled?: boolean; sortOrder?: number },
+    @Body()
+    body: {
+      title?: string;
+      timeStart?: string;
+      timeEnd?: string;
+      enabled?: boolean;
+      sortOrder?: number;
+    },
     @CurrentUser() user: JwtUserPayload,
   ) {
     return this.ops.updateBlock(block, body, user);
@@ -71,10 +78,16 @@ export class OperationsController {
     },
   ) {
     if (!body?.block) throw new BadRequestException('block обязателен');
-    return this.ops.carryForwardBoard(user, body.block, body.fromDate, body.toDate, {
-      resetTaskStatus: body.resetTaskStatus,
-      onlyIncomplete: body.onlyIncomplete,
-    });
+    return this.ops.carryForwardBoard(
+      user,
+      body.block,
+      body.fromDate,
+      body.toDate,
+      {
+        resetTaskStatus: body.resetTaskStatus,
+        onlyIncomplete: body.onlyIncomplete,
+      },
+    );
   }
 
   @Get('tasks')
@@ -94,7 +107,8 @@ export class OperationsController {
   updateCategory(
     @CurrentUser() user: JwtUserPayload,
     @Param('id') id: string,
-    @Body() body: Partial<{ title: string; pinned: boolean; sortOrder: number }>,
+    @Body()
+    body: Partial<{ title: string; pinned: boolean; sortOrder: number }>,
   ) {
     return this.ops.updateCategory(user, id, body);
   }
@@ -105,7 +119,10 @@ export class OperationsController {
   }
 
   @Post('categories/reorder')
-  reorderCategories(@CurrentUser() user: JwtUserPayload, @Body() body: { orderedIds: string[] }) {
+  reorderCategories(
+    @CurrentUser() user: JwtUserPayload,
+    @Body() body: { orderedIds: string[] },
+  ) {
     return this.ops.reorderCategories(user, body.orderedIds ?? []);
   }
 
@@ -203,7 +220,10 @@ export class OperationsController {
   }
 
   @Post('tasks/reorder')
-  reorder(@CurrentUser() user: JwtUserPayload, @Body() body: { orderedIds: string[] }) {
+  reorder(
+    @CurrentUser() user: JwtUserPayload,
+    @Body() body: { orderedIds: string[] },
+  ) {
     return this.ops.reorderTasks(user, body.orderedIds ?? []);
   }
 
@@ -295,7 +315,10 @@ export class OperationsController {
   }
 
   @Delete('violations/:id')
-  deleteViolation(@CurrentUser() user: JwtUserPayload, @Param('id') id: string) {
+  deleteViolation(
+    @CurrentUser() user: JwtUserPayload,
+    @Param('id') id: string,
+  ) {
     return this.ops.deleteViolation(user, id);
   }
 
@@ -316,7 +339,8 @@ export class OperationsController {
   patchProblem(
     @CurrentUser() user: JwtUserPayload,
     @Param('id') id: string,
-    @Body() body: Partial<{ title: string; description: string; resolved: boolean }>,
+    @Body()
+    body: Partial<{ title: string; description: string; resolved: boolean }>,
   ) {
     return this.ops.updateProblem(user, id, body);
   }
@@ -388,7 +412,9 @@ export class OperationsController {
   ) {
     return this.ops.updateSettings(user, {
       formsWebhookNote: body.formsWebhookNote,
-      googleFormMappings: body.googleFormMappings as Prisma.InputJsonValue | undefined,
+      googleFormMappings: body.googleFormMappings as
+        | Prisma.InputJsonValue
+        | undefined,
     });
   }
 

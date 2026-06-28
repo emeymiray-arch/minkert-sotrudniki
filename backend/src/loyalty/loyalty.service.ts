@@ -1,6 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { paginatedResult, parsePagination } from '../common/pagination/pagination.util';
+import {
+  paginatedResult,
+  parsePagination,
+} from '../common/pagination/pagination.util';
 
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
@@ -28,7 +35,10 @@ const loyaltyListSelect = {
   phoneNormalized: true,
   createdAt: true,
   updatedAt: true,
-  stamps: { select: { slot: true, masterName: true }, orderBy: { slot: 'asc' as const } },
+  stamps: {
+    select: { slot: true, masterName: true },
+    orderBy: { slot: 'asc' as const },
+  },
 } as const;
 
 @Injectable()
@@ -51,13 +61,16 @@ export class LoyaltyService {
     };
   }
 
-  async listClients(query?: string, pageRaw?: string | number, limitRaw?: string | number) {
+  async listClients(
+    query?: string,
+    pageRaw?: string | number,
+    limitRaw?: string | number,
+  ) {
     const q = query?.trim();
     const digits = q ? normalizePhone(q) : '';
     const { page, limit, skip } = parsePagination(pageRaw, limitRaw, 50, 100);
-    const where =
-      q ?
-        {
+    const where = q
+      ? {
           OR: [
             { name: { contains: q, mode: 'insensitive' as const } },
             { phone: { contains: q, mode: 'insensitive' as const } },
@@ -77,7 +90,12 @@ export class LoyaltyService {
       }),
     ]);
 
-    return paginatedResult(rows.map((c) => this.mapClient(c)), total, page, limit);
+    return paginatedResult(
+      rows.map((c) => this.mapClient(c)),
+      total,
+      page,
+      limit,
+    );
   }
 
   async createClient(body: { name: string; phone: string }) {
@@ -85,7 +103,8 @@ export class LoyaltyService {
     const phone = body.phone.trim();
     const phoneNormalized = normalizePhone(phone);
     if (!name) throw new BadRequestException('Имя клиента обязательно');
-    if (phoneNormalized.length < 10) throw new BadRequestException('Введите корректный номер телефона');
+    if (phoneNormalized.length < 10)
+      throw new BadRequestException('Введите корректный номер телефона');
 
     const row = await this.prisma.loyaltyClient.create({
       data: { name, phone, phoneNormalized },
@@ -103,7 +122,9 @@ export class LoyaltyService {
     if (!client) throw new NotFoundException('Клиент не найден');
 
     if (slot === 10 && !giftEligible(client.stamps)) {
-      throw new BadRequestException('10-е сердечко доступно только после 9 процедур');
+      throw new BadRequestException(
+        '10-е сердечко доступно только после 9 процедур',
+      );
     }
 
     const cleanMaster = masterName.trim();
@@ -112,7 +133,12 @@ export class LoyaltyService {
     } else {
       await this.prisma.loyaltyStamp.upsert({
         where: { clientId_slot: { clientId, slot } },
-        create: { clientId, slot, masterName: cleanMaster, stampedAt: new Date() },
+        create: {
+          clientId,
+          slot,
+          masterName: cleanMaster,
+          stampedAt: new Date(),
+        },
         update: { masterName: cleanMaster, stampedAt: new Date() },
       });
     }

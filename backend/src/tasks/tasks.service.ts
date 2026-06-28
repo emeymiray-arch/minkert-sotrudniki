@@ -1,7 +1,17 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 import type { JwtUserPayload } from '../auth/types/jwt-user';
-import { utcDateToWeekDayDb, WEEK_DAY_LABEL_RU, WEEK_DAYS_DB, type WeekDayDb } from '../common/constants/days';
+import {
+  utcDateToWeekDayDb,
+  WEEK_DAY_LABEL_RU,
+  WEEK_DAYS_DB,
+  type WeekDayDb,
+} from '../common/constants/days';
 import { addUtcDays, startUtcWeekMonday } from '../common/date/week';
 import { clampStatus } from '../common/kpi/kpi.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +19,10 @@ import type { CreateTaskDto } from './dto/create-task.dto';
 import type { OptionalDayStatusesDto } from './dto/day-status.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
 
-function applyDays(base: Record<string, number>, patch?: OptionalDayStatusesDto): Record<string, number> {
+function applyDays(
+  base: Record<string, number>,
+  patch?: OptionalDayStatusesDto,
+): Record<string, number> {
   const next = { ...base };
   if (!patch) return next;
   for (const k of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const) {
@@ -23,11 +36,17 @@ export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
   private ensureWriteRole(user?: JwtUserPayload) {
-    if (!user || (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER))
+    if (
+      !user ||
+      (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER)
+    )
       throw new ForbiddenException('Недостаточно прав для изменений');
   }
 
-  private isViewerEditingOwnTasks(user: JwtUserPayload | undefined, taskEmployeeId: string) {
+  private isViewerEditingOwnTasks(
+    user: JwtUserPayload | undefined,
+    taskEmployeeId: string,
+  ) {
     return (
       user?.role === UserRole.VIEWER &&
       Boolean(user.linkedEmployeeId) &&
@@ -65,7 +84,11 @@ export class TasksService {
   }
 
   /** Копирует все задачи недели на следующую (новые строки, баллы 0). Старая неделя не трогается. */
-  async rolloverWeek(employeeId: string, weekRaw: string, user?: JwtUserPayload) {
+  async rolloverWeek(
+    employeeId: string,
+    weekRaw: string,
+    user?: JwtUserPayload,
+  ) {
     this.ensureWriteRole(user);
     await this.ensureEmployee(employeeId);
     const fromMonday = startUtcWeekMonday(weekRaw);
@@ -76,7 +99,12 @@ export class TasksService {
       orderBy: { createdAt: 'asc' },
     });
     if (!source.length) {
-      return { created: 0, skipped: 0, fromWeek: this.isoDate(fromMonday), toWeek: this.isoDate(toMonday) };
+      return {
+        created: 0,
+        skipped: 0,
+        fromWeek: this.isoDate(fromMonday),
+        toWeek: this.isoDate(toMonday),
+      };
     }
 
     const target = await this.prisma.task.findMany({
@@ -84,7 +112,9 @@ export class TasksService {
     });
     const titles = new Set(target.map((t) => t.title.trim().toLowerCase()));
 
-    const toCreate = source.filter((t) => !titles.has(t.title.trim().toLowerCase()));
+    const toCreate = source.filter(
+      (t) => !titles.has(t.title.trim().toLowerCase()),
+    );
     const skipped = source.length - toCreate.length;
     if (toCreate.length) {
       await this.prisma.task.createMany({
@@ -140,13 +170,21 @@ export class TasksService {
   }
 
   async update(taskId: string, dto: UpdateTaskDto, user?: JwtUserPayload) {
-    const current = await this.prisma.task.findUnique({ where: { id: taskId } });
+    const current = await this.prisma.task.findUnique({
+      where: { id: taskId },
+    });
     if (!current) throw new NotFoundException('Задача не найдена');
 
     const viewerSelf = this.isViewerEditingOwnTasks(user, current.employeeId);
     if (viewerSelf) {
-      if (dto.title !== undefined || dto.description !== undefined || dto.taskDate !== undefined) {
-        throw new ForbiddenException('Можно менять только отметки по дням недели');
+      if (
+        dto.title !== undefined ||
+        dto.description !== undefined ||
+        dto.taskDate !== undefined
+      ) {
+        throw new ForbiddenException(
+          'Можно менять только отметки по дням недели',
+        );
       }
       if (dto.days === undefined) {
         throw new BadRequestException('Укажите поле days');
@@ -164,12 +202,14 @@ export class TasksService {
       sat: current.sat,
       sun: current.sun,
     };
-    const mergedDays = dto.days !== undefined ? applyDays(base, dto.days) : base;
+    const mergedDays =
+      dto.days !== undefined ? applyDays(base, dto.days) : base;
     return this.prisma.task.update({
       where: { id: taskId },
       data: {
         title: dto.title?.trim(),
-        description: dto.description !== undefined ? dto.description.trim() : undefined,
+        description:
+          dto.description !== undefined ? dto.description.trim() : undefined,
         taskDate:
           dto.taskDate !== undefined && dto.taskDate !== null
             ? startUtcWeekMonday(dto.taskDate)
@@ -181,7 +221,9 @@ export class TasksService {
 
   async remove(taskId: string, user?: JwtUserPayload) {
     this.ensureWriteRole(user);
-    const current = await this.prisma.task.findUnique({ where: { id: taskId } });
+    const current = await this.prisma.task.findUnique({
+      where: { id: taskId },
+    });
     if (!current) throw new NotFoundException('Задача не найдена');
     await this.prisma.task.delete({ where: { id: taskId } });
     return { ok: true };
@@ -198,11 +240,15 @@ export class TasksService {
     const weekMonday = startUtcWeekMonday(date);
     const dayKey = utcDateToWeekDayDb(date);
     const dayIdx = WEEK_DAYS_DB.indexOf(dayKey);
-    const dayLabelRu = dayIdx >= 0 ? WEEK_DAY_LABEL_RU[dayIdx] : dayKey.toUpperCase();
+    const dayLabelRu =
+      dayIdx >= 0 ? WEEK_DAY_LABEL_RU[dayIdx] : dayKey.toUpperCase();
 
     const weekEnd = addUtcDays(weekMonday, 6);
     const tasks = await this.prisma.task.findMany({
-      where: { employeeId: emp.id, taskDate: { gte: weekMonday, lte: weekEnd } },
+      where: {
+        employeeId: emp.id,
+        taskDate: { gte: weekMonday, lte: weekEnd },
+      },
       orderBy: [{ createdAt: 'asc' }],
     });
 
@@ -221,19 +267,26 @@ export class TasksService {
     };
   }
 
-  async patchPublicTaskDayByToken(diaryToken: string, taskId: string, dateRaw: string, scoreRaw: number) {
+  async patchPublicTaskDayByToken(
+    diaryToken: string,
+    taskId: string,
+    dateRaw: string,
+    scoreRaw: number,
+  ) {
     const emp = await this.prisma.employee.findFirst({
       where: { diaryToken },
       select: { id: true },
     });
     if (!emp) throw new NotFoundException('Ссылка недействительна');
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
-    if (!task || task.employeeId !== emp.id) throw new NotFoundException('Задача не найдена');
+    if (!task || task.employeeId !== emp.id)
+      throw new NotFoundException('Задача не найдена');
 
     const date = this.parseDayParam(dateRaw);
     const wSel = startUtcWeekMonday(date).getTime();
     const wTask = startUtcWeekMonday(task.taskDate).getTime();
-    if (wSel !== wTask) throw new BadRequestException('Дата не в неделе этой задачи');
+    if (wSel !== wTask)
+      throw new BadRequestException('Дата не в неделе этой задачи');
 
     const dayKey = utcDateToWeekDayDb(date);
     const score = clampStatus(scoreRaw);
@@ -255,11 +308,13 @@ export class TasksService {
 
   private parseDayParam(raw: string): Date {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw?.trim() ?? '');
-    if (!m) throw new BadRequestException('Дата должна быть в формате YYYY-MM-DD');
+    if (!m)
+      throw new BadRequestException('Дата должна быть в формате YYYY-MM-DD');
     const y = Number(m[1]);
     const mo = Number(m[2]);
     const d = Number(m[3]);
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) throw new BadRequestException('Некорректная дата');
+    if (mo < 1 || mo > 12 || d < 1 || d > 31)
+      throw new BadRequestException('Некорректная дата');
     return new Date(Date.UTC(y, mo - 1, d, 12, 0, 0, 0));
   }
 

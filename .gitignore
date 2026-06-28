@@ -7,6 +7,8 @@
 backend/.env
 frontend/.env
 backend/.env.neon
+backend/.env.production
+scripts/.gdrive-backup.env
 .env.local
 
 # database dumps (не коммитить)
