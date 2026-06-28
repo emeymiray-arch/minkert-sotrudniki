@@ -68,6 +68,8 @@ model Employee {
   id          String         @id @default(cuid())
   name        String
   position    String
+  /** Телефон для WhatsApp (только цифры или +7…). */
+  phone       String         @default("")
   status      EmployeeStatus @default(ACTIVE)
   /** Секретная ссылка на публичный дневник (без логина). */
   diaryToken  String?        @unique
@@ -75,6 +77,7 @@ model Employee {
   updatedAt   DateTime       @updatedAt
   tasks       Task[]
   diaryDays   DiaryDay[]
+  dailyLogs   EmployeeDailyLog[]
   linkedUsers User[]
   opsProfile  OpsStaffProfile?
   opsTasks    OpsTask[]
@@ -85,6 +88,26 @@ model Employee {
 
   @@index([name])
   @@index([status])
+}
+
+/** Отметка управляющего за день (план в WhatsApp + итог вечером). */
+model EmployeeDailyLog {
+  id             String   @id @default(cuid())
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date           DateTime @db.Date
+  planText       String   @default("")
+  reportOnTime   Boolean  @default(false)
+  planDone       Boolean  @default(false)
+  noViolations   Boolean  @default(false)
+  qualityOk      Boolean  @default(false)
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId, date])
+  @@index([date])
 }
 
 // ——— Модуль «Управление» (операционная панель салона) ———

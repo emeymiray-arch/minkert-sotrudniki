@@ -1,8 +1,5 @@
 import { Briefcase, ChevronLeft } from 'lucide-react';
-import { NavLink, Outlet, Link } from 'react-router-dom';
-
-import { cn } from '@/lib/utils';
-import { OPS_NAV } from '@/operations/constants';
+import { Link, Outlet } from 'react-router-dom';
 
 export function OpsLayout() {
   return (
@@ -14,7 +11,7 @@ export function OpsLayout() {
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">Контроль</h1>
-            <p className="text-[13px] text-muted dark:text-white/50">Операционная панель салона</p>
+            <p className="text-[13px] text-muted dark:text-white/50">Задачи для контроля процессов салона</p>
           </div>
         </div>
         <Link
@@ -25,26 +22,6 @@ export function OpsLayout() {
           К Minkert
         </Link>
       </div>
-
-      <nav className="-mx-1 flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
-        {OPS_NAV.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={false}
-            className={({ isActive }) =>
-              cn(
-                'shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold transition',
-                isActive ?
-                  'bg-accent/20 text-zinc-900 dark:text-white'
-                : 'text-muted hover:bg-black/[0.05] dark:text-white/55 dark:hover:bg-white/[0.06]',
-              )
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
 
       <Outlet />
     </div>

@@ -17,12 +17,24 @@ export type Employee = {
   id: string;
   name: string;
   position: string;
+  phone?: string;
   status: EmployeeStatus;
   createdAt: string;
   updatedAt: string;
-  /** Секрет для публичных ссылок /d/:token (дневник) и /t/:token (задачи недели). */
   diaryToken?: string | null;
-  _count?: { tasks: number };
+  _count?: { tasks: number; dailyLogs?: number };
+};
+
+export type EmployeeDailyLog = {
+  id: string;
+  employeeId: string;
+  date: string;
+  planText: string;
+  reportOnTime: boolean;
+  planDone: boolean;
+  noViolations: boolean;
+  qualityOk: boolean;
+  notes: string;
 };
 
 export type EmployeeListItem = Employee & {

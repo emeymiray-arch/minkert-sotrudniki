@@ -21,15 +21,8 @@ const LoginPage = React.lazy(() => import('@/pages/LoginPage'));
 const PublicDiaryPage = React.lazy(() => import('@/pages/PublicDiaryPage'));
 const PublicEmployeeTasksPage = React.lazy(() => import('@/pages/PublicEmployeeTasksPage'));
 const OpsLayout = React.lazy(() => import('@/operations/layout/OpsLayout').then((m) => ({ default: m.OpsLayout })));
-const OpsAnalyticsPage = React.lazy(() => import('@/operations/pages/OpsAnalyticsPage'));
-const OpsBlockPage = React.lazy(() => import('@/operations/pages/OpsBlockPage'));
-const OpsContentPage = React.lazy(() => import('@/operations/pages/OpsContentPage'));
-const OpsSettingsPage = React.lazy(() => import('@/operations/pages/OpsSettingsPage'));
-const OpsStaffDetailPage = React.lazy(() => import('@/operations/pages/OpsStaffDetailPage'));
-const OpsStaffPage = React.lazy(() => import('@/operations/pages/OpsStaffPage'));
-const OpsJournalPage = React.lazy(() => import('@/operations/pages/OpsJournalPage'));
+const OpsSimpleTasksPage = React.lazy(() => import('@/operations/pages/OpsSimpleTasksPage'));
 const OpsProblemsPage = React.lazy(() => import('@/operations/pages/OpsProblemsPage'));
-const OpsViolationsPage = React.lazy(() => import('@/operations/pages/OpsViolationsPage'));
 
 function PageFallback() {
   return (
@@ -197,6 +190,18 @@ export default function App() {
               />
               <Route path="/upravlenie/finansy" element={<Navigate to="/finansy" replace />} />
               <Route path="/upravlenie/problemy" element={<Navigate to="/problemy" replace />} />
+              <Route path="/upravlenie/utro" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/den" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/vecher" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/sleduyushchiy-den" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/nedelya" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/sotrudniki" element={<Navigate to="/employees" replace />} />
+              <Route path="/upravlenie/sotrudniki/:id" element={<Navigate to="/employees" replace />} />
+              <Route path="/upravlenie/zhurnal" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/narusheniya" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/kontent" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/analitika" element={<Navigate to="/upravlenie" replace />} />
+              <Route path="/upravlenie/nastroyki" element={<Navigate to="/upravlenie" replace />} />
               <Route
                 path="/settings"
                 element={
@@ -214,100 +219,11 @@ export default function App() {
                   </Lazy>
                 }
               >
-                <Route index element={<Navigate to="/upravlenie/utro" replace />} />
                 <Route
-                  path="utro"
+                  index
                   element={
                     <Lazy>
-                      <OpsBlockPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="den"
-                  element={
-                    <Lazy>
-                      <OpsBlockPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="vecher"
-                  element={
-                    <Lazy>
-                      <OpsBlockPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="sleduyushchiy-den"
-                  element={
-                    <Lazy>
-                      <OpsBlockPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="nedelya"
-                  element={
-                    <Lazy>
-                      <OpsBlockPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="sotrudniki"
-                  element={
-                    <Lazy>
-                      <OpsStaffPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="sotrudniki/:id"
-                  element={
-                    <Lazy>
-                      <OpsStaffDetailPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="zhurnal"
-                  element={
-                    <Lazy>
-                      <OpsJournalPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="narusheniya"
-                  element={
-                    <Lazy>
-                      <OpsViolationsPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="kontent"
-                  element={
-                    <Lazy>
-                      <OpsContentPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="analitika"
-                  element={
-                    <Lazy>
-                      <OpsAnalyticsPage />
-                    </Lazy>
-                  }
-                />
-                <Route
-                  path="nastroyki"
-                  element={
-                    <Lazy>
-                      <OpsSettingsPage />
+                      <OpsSimpleTasksPage />
                     </Lazy>
                   }
                 />

@@ -507,6 +507,26 @@ export class OperationsService {
     return { forDate: isoDate(forDate), block, items };
   }
 
+  async listAllTasksForDate(dateRaw?: string) {
+    await this.ensureDefaults();
+    const forDate = parseDayParam(dateRaw);
+    await this.applyOverdue();
+    const items = await this.prisma.opsTask.findMany({
+      where: { forDate },
+      orderBy: [{ pinned: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+      include: { assignee: { select: { id: true, name: true } } },
+    });
+    const overdue = await this.prisma.opsTask.findMany({
+      where: {
+        forDate: { lt: forDate },
+        status: { notIn: [OpsTaskStatus.DONE] },
+      },
+      orderBy: [{ forDate: 'asc' }, { sortOrder: 'asc' }],
+      include: { assignee: { select: { id: true, name: true } } },
+    });
+    return { forDate: isoDate(forDate), items, overdue };
+  }
+
   async createTask(
     user: JwtUserPayload | undefined,
     body: {

@@ -90,6 +90,11 @@ export class OperationsController {
     );
   }
 
+  @Get('tasks/all')
+  listAllTasks(@Query('date') date?: string) {
+    return this.ops.listAllTasksForDate(date);
+  }
+
   @Get('tasks')
   listTasks(@Query('block') block: OpsTimeBlock, @Query('date') date?: string) {
     return this.ops.listTasks(block, date);
