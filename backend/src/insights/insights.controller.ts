@@ -13,6 +13,11 @@ export class InsightsController {
     return this.insights.unifiedDashboard();
   }
 
+  @Get('ai/summary')
+  aiSummary() {
+    return this.insights.aiSummary();
+  }
+
   @Get('clients/unified')
   unifiedClients(
     @Query('q') q?: string,

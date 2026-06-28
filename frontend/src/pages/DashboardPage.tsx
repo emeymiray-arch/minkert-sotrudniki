@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Briefcase, Heart, LineChart, Users2, Wallet } from 'lucide-react';
+import { ArrowRight, Briefcase, Heart, LineChart, Sparkles, Users2, Wallet } from 'lucide-react';
+import * as React from 'react';
 import { Link } from 'react-router-dom';
 
 import { AiInsightCard, type AiInsight } from '@/components/insights/AiInsightCard';
@@ -57,13 +58,14 @@ type UnifiedDashboard = {
     active30d: number;
     index: number;
   };
-  ai: {
-    director: AiInsight;
-    finance: AiInsight;
-    hr: AiInsight;
-    marketing: AiInsight;
-    operations: AiInsight;
-  };
+};
+
+type AiInsights = {
+  director: AiInsight;
+  finance: AiInsight;
+  hr: AiInsight;
+  marketing: AiInsight;
+  operations: AiInsight;
 };
 
 function money(n: number) {
@@ -105,10 +107,19 @@ function SectionLink({ to, label }: { to: string; label: string }) {
 }
 
 export default function DashboardPage() {
+  const [aiRequested, setAiRequested] = React.useState(false);
+
   const dash = useQuery({
     queryKey: ['insights', 'dashboard'],
     queryFn: () => apiJson<UnifiedDashboard>('/insights/dashboard'),
     staleTime: 120_000,
+  });
+
+  const aiInsights = useQuery({
+    queryKey: ['insights', 'ai-summary'],
+    queryFn: () => apiJson<AiInsights>('/insights/ai/summary'),
+    enabled: aiRequested,
+    staleTime: 300_000,
   });
 
   const d = dash.data;
@@ -139,21 +150,11 @@ export default function DashboardPage() {
       />
 
       {dash.isLoading ?
-        <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-36" />
-            ))}
-          </div>
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">AI-анализ</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-28" />
-              ))}
-            </div>
-          </div>
-        </>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
+        </div>
       : !d ?
         <Card>
           <CardHeader title="Нет данных" description="Не удалось загрузить сводку." />
@@ -257,17 +258,61 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">AI-анализ</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <AiInsightCard title="AI-Директор" data={d.ai.director} description="Сводные выводы по всем направлениям" />
-              <AiInsightCard title="AI Финансист" data={d.ai.finance} />
-              <AiInsightCard title="AI HR" data={d.ai.hr} />
-              <AiInsightCard title="AI Маркетолог" data={d.ai.marketing} />
-              <div className="lg:col-span-2">
-                <AiInsightCard title="AI Операционный" data={d.ai.operations} />
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Советы по салону</h2>
+                <p className="text-[13px] text-muted dark:text-white/50">
+                  Краткие выводы по вашим цифрам — загружаются по запросу, не при открытии страницы.
+                </p>
               </div>
+              {!aiRequested ? (
+                <Button onClick={() => setAiRequested(true)}>
+                  <Sparkles className="size-4" />
+                  Показать советы
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => aiInsights.refetch()}
+                  disabled={aiInsights.isFetching}
+                >
+                  Обновить
+                </Button>
+              )}
             </div>
+
+            {!aiRequested ? null : aiInsights.isLoading ?
+              <div className="grid gap-4 lg:grid-cols-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-28" />
+                ))}
+              </div>
+            : aiInsights.isError ?
+              <Card>
+                <CardHeader
+                  title="Не удалось загрузить советы"
+                  description="Попробуйте ещё раз — возможно, API на Render просыпается."
+                />
+                <Button className="mt-3" onClick={() => aiInsights.refetch()}>
+                  Повторить
+                </Button>
+              </Card>
+            : aiInsights.data ?
+              <div className="grid gap-4 lg:grid-cols-2">
+                <AiInsightCard
+                  title="Директор"
+                  data={aiInsights.data.director}
+                  description="Сводные выводы по всем направлениям"
+                />
+                <AiInsightCard title="Финансы" data={aiInsights.data.finance} />
+                <AiInsightCard title="Команда" data={aiInsights.data.hr} />
+                <AiInsightCard title="Маркетинг" data={aiInsights.data.marketing} />
+                <div className="lg:col-span-2">
+                  <AiInsightCard title="Операции" data={aiInsights.data.operations} />
+                </div>
+              </div>
+            : null}
           </div>
         </>
       }

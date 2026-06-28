@@ -236,10 +236,12 @@ export class InsightsService {
 
   async unifiedDashboard() {
     const ctx = await this.loadDashboardContext();
-    return {
-      ...ctx.dash,
-      ai: this.buildAiInsights(ctx),
-    };
+    return ctx.dash;
+  }
+
+  async aiSummary() {
+    const ctx = await this.loadDashboardContext();
+    return this.buildAiInsights(ctx);
   }
 
   async unifiedClients(
